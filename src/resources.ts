@@ -1,4 +1,6 @@
 
+export let slug = 'lastslice-voxel-world'
+
 // Debug settings
 export const DEBUG = {
   ALWAYS_VISIBLE: true, // Set to true to make all voxels visible regardless of distance
@@ -12,12 +14,10 @@ export const VISIBILITY_THRESHOLD = 5 // Increased visibility threshold for larg
 
 // Scene positions
 export const SPAWN_POSITION = {x: 8, y: 0, z: 8} // Center of spawn parcel (-1,0)
-export const MAIN_SCENE_POSITION = {x: 34, y: 30, z: 14}
+export const MAIN_SCENE_POSITION = {x: 34, y: 80, z: 14}
 
 // Timing configuration (in seconds)
-export const TERRAIN_GENERATION_DELAY = 10 // Wait 1 second before generating terrain
-export const PLAYER_TELEPORT_DELAY = 15 // Wait 5 seconds before teleporting player
-
-//
+export const TERRAIN_GENERATION_DELAY = 15 // Wait 1 second before generating terrain
+export const PLAYER_TELEPORT_DELAY = 30 // Wait 5 seconds before teleporting player
 
 

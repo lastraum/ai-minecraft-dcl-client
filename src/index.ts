@@ -5,7 +5,8 @@ import { createTerrainGenerator } from './terrain/terrain-generator'
 import { initChunkManager } from './systems/chunk-manager'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { CHUNK_SIZE, MAIN_SCENE_SIZE, DEBUG, TERRAIN_GENERATION_DELAY, PLAYER_TELEPORT_DELAY, VISIBILITY_THRESHOLD, SPAWN_POSITION, MAIN_SCENE_POSITION } from './resources'
-
+import { setupUi } from './ui/ui' 
+import { toggleSplashScreen } from './ui/splashScreen'
 // Track timing for delays
 let terrainGenerationTimer = 0
 let playerTeleportTimer = 0
@@ -22,6 +23,8 @@ let chunkManagerInstance: any
 
 export function main() {
   console.log('Initializing Minecraft voxel world...')
+  
+  setupUi()
   
   // Phase 1: Initial setup
   setupScene()
@@ -141,6 +144,7 @@ function teleportPlayerToMainScene() {
   })
   
   console.log('Player teleported to main scene')
+  toggleSplashScreen()
 }
 
 // Declare global namespace for window to store our variables
