@@ -36,14 +36,26 @@ export function createVoxelSystem(
   const modelPaths: Record<BlockType, string> = {
     [BlockType.GRASS]: 'models/grass.glb',
     [BlockType.DIRT]: 'models/dirt.glb',
-    [BlockType.STONE_DARK]: 'models/stone_dark.glb'
+    [BlockType.STONE_DARK]: 'models/stone_dark.glb',
+    [BlockType.SAND]: 'models/sand.glb',
+    [BlockType.WOOD]: 'models/woodplanks.glb',
+    [BlockType.LEAVES]: 'models/leaves.glb',
+    [BlockType.WOOD_PLANK_LIGHT_RED]: 'models/wood_plank_light_red.glb',
+    [BlockType.WOOD_PLANK_DARK]: 'models/wood_plank_dark.glb',
+    [BlockType.WATER]: 'models/water.glb'
   }
 
   // Track the count of each block type for logging
   const blockCounts: Record<BlockType, number> = {
     [BlockType.GRASS]: 0,
     [BlockType.DIRT]: 0,
-    [BlockType.STONE_DARK]: 0
+    [BlockType.STONE_DARK]: 0,
+    [BlockType.SAND]: 0,
+    [BlockType.WOOD]: 0,
+    [BlockType.LEAVES]: 0,
+    [BlockType.WOOD_PLANK_LIGHT_RED]: 0,
+    [BlockType.WOOD_PLANK_DARK]: 0,
+    [BlockType.WATER]: 0
   }
   
   // Create all voxel entities and organize them into chunks
@@ -57,8 +69,10 @@ export function createVoxelSystem(
     // Add GltfContainer component (model) based on block type
     GltfContainer.create(entity, {
       src: modelPaths[pos.type],
-      invisibleMeshesCollisionMask:ColliderLayer.CL_NONE,
-      visibleMeshesCollisionMask:ColliderLayer.CL_PHYSICS | ColliderLayer.CL_POINTER,
+      invisibleMeshesCollisionMask: ColliderLayer.CL_NONE,
+      visibleMeshesCollisionMask: pos.type === BlockType.WATER ? 
+        ColliderLayer.CL_POINTER : // Water has no collision, only pointer
+        ColliderLayer.CL_PHYSICS | ColliderLayer.CL_POINTER,
     })
     
     // Add Transform component (position)
@@ -83,7 +97,7 @@ export function createVoxelSystem(
   // Print how many chunks were created
   const chunks = chunkManager.getChunks()
   console.log(`Created ${Object.keys(chunks).length} chunks`)
-  console.log(`Block counts: Grass: ${blockCounts[BlockType.GRASS]}, Dirt: ${blockCounts[BlockType.DIRT]}, Stone: ${blockCounts[BlockType.STONE_DARK]}`)
+  console.log(`Block counts: Grass: ${blockCounts[BlockType.GRASS]}, Dirt: ${blockCounts[BlockType.DIRT]}, Stone: ${blockCounts[BlockType.STONE_DARK]}, Sand: ${blockCounts[BlockType.SAND]}, Wood: ${blockCounts[BlockType.WOOD]}, Leaves: ${blockCounts[BlockType.LEAVES]}, Light Red Planks: ${blockCounts[BlockType.WOOD_PLANK_LIGHT_RED]}, Dark Planks: ${blockCounts[BlockType.WOOD_PLANK_DARK]}, Water: ${blockCounts[BlockType.WATER]}`)
   
   if (alwaysVisible) {
     console.log('DEBUG: Visibility toggle disabled - all voxels are always visible')
