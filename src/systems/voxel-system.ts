@@ -2,6 +2,7 @@ import { engine, Entity, GltfContainer, Transform, VisibilityComponent } from '@
 import { Vector3 } from '@dcl/sdk/math'
 import { VoxelPosition, BlockType } from '../terrain/terrain-generator'
 import { Chunk } from './chunk-manager'
+import { trackModelLoading } from './model-loading-system'
 
 // Define the interface for the chunk manager
 interface ChunkManager {
@@ -26,14 +27,14 @@ export function createVoxelSystem(
   const modelPaths: Record<BlockType, string> = {
     [BlockType.GRASS]: 'models/grass.glb',
     [BlockType.DIRT]: 'models/dirt.glb',
-    [BlockType.STONE]: 'models/stone.glb'
+    [BlockType.STONE_DARK]: 'models/stone_dark.glb'
   }
 
   // Track the count of each block type for logging
   const blockCounts: Record<BlockType, number> = {
     [BlockType.GRASS]: 0,
     [BlockType.DIRT]: 0,
-    [BlockType.STONE]: 0
+    [BlockType.STONE_DARK]: 0
   }
   
   // Create all voxel entities and organize them into chunks
@@ -64,6 +65,9 @@ export function createVoxelSystem(
       visible: false
     })
     
+    // Track this entity for model loading
+    trackModelLoading(entity)
+    
     // Add to appropriate chunk
     chunkManager.addEntityToChunk(entity, pos)
   })
@@ -71,7 +75,7 @@ export function createVoxelSystem(
   // Print how many chunks were created
   const chunks = chunkManager.getChunks()
   console.log(`Created ${Object.keys(chunks).length} chunks`)
-  console.log(`Block counts: Grass: ${blockCounts[BlockType.GRASS]}, Dirt: ${blockCounts[BlockType.DIRT]}, Stone: ${blockCounts[BlockType.STONE]}`)
+  console.log(`Block counts: Grass: ${blockCounts[BlockType.GRASS]}, Dirt: ${blockCounts[BlockType.DIRT]}, Stone: ${blockCounts[BlockType.STONE_DARK]}`)
   
   // Create a system that runs every frame to update visibility
   const visibilitySystem = () => {
@@ -81,7 +85,7 @@ export function createVoxelSystem(
       return
     }
     const playerPos = playerTransform.position
-    // Loop through all chunks to check visibility///
+    // Loop through all chunks to check visibility/// 
     for (const chunkKey in chunks) {
       const chunk = chunks[chunkKey]
       

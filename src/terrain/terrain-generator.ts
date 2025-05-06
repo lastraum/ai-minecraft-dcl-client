@@ -10,7 +10,7 @@ export interface VoxelPosition {
 export enum BlockType {
   GRASS = 'grass',
   DIRT = 'dirt',
-  STONE = 'stone'
+  STONE_DARK = 'stone_dark'
 }
 
 /**
@@ -49,7 +49,7 @@ export function createTerrainGenerator(sceneSize: number) {
             } else if (y > height - 4) {
               type = BlockType.DIRT // Next 3 layers are dirt
             } else {
-              type = BlockType.STONE // Everything below is stone
+              type = BlockType.STONE_DARK // Everything below is stone
             }
             
             voxelPositions.push({ x, y, z, type })
