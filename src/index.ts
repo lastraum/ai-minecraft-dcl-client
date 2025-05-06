@@ -2,13 +2,12 @@ import { engine, Transform, Entity, MeshRenderer, Material, MeshCollider, TextSh
 import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { createVoxelSystem } from './systems/voxel-system'
 import { createTerrainGenerator, BiomeSettings, DEFAULT_BIOME_SETTINGS } from './terrain/terrain-generator'
-import { initChunkManager } from './systems/chunk-manager'
 import { movePlayerTo } from '~system/RestrictedActions'
-import { CHUNK_SIZE, MAIN_SCENE_SIZE, DEBUG, TERRAIN_GENERATION_DELAY, PLAYER_TELEPORT_DELAY, VISIBILITY_THRESHOLD, SPAWN_POSITION, MAIN_SCENE_POSITION, BIOME_CUSTOMIZATION_ENABLED, BIOME_CONFIG } from './resources'
+import { MAIN_SCENE_SIZE, DEBUG, TERRAIN_GENERATION_DELAY, PLAYER_TELEPORT_DELAY, VISIBILITY_THRESHOLD, SPAWN_POSITION, MAIN_SCENE_POSITION, BIOME_CUSTOMIZATION_ENABLED, BIOME_CONFIG, SPAWN_PARCEL_X_OFFSET } from './resources'
 import { setupUi } from './ui/ui' 
 import { toggleSplashScreen } from './ui/splashScreen'
 import { setOnApplySettings, toggleBiomeSettings } from './ui/biomeSettings'
-
+import * as utils from '@dcl-sdk/utils'
 // Track timing for delays
 let terrainGenerationTimer = 0
 let playerTeleportTimer = 0
@@ -21,7 +20,7 @@ let hasCompletedInitialization = false
 
 // Store managers at module level
 let terrainGeneratorInstance: any
-let chunkManagerInstance: any
+let voxelSystemInstance: any
 
 // Store current biome settings
 let currentBiomeSettings: BiomeSettings = {...DEFAULT_BIOME_SETTINGS}
@@ -75,9 +74,8 @@ function setupScene() {
   currentBiomeSettings = generateRandomBiomeSettings()
   console.log('Generated random biome settings:', JSON.stringify(currentBiomeSettings))
   
-  // Initialize managers with random settings
+  // Initialize terrain generator with random settings
   terrainGeneratorInstance = createTerrainGenerator(MAIN_SCENE_SIZE, DEBUG.MAX_LAYERS, currentBiomeSettings)
-  chunkManagerInstance = initChunkManager(CHUNK_SIZE)
   
   // Create a simple flat ground for the spawn area
   createSpawnAreaGround()
@@ -141,13 +139,12 @@ function timerSystem(dt: number): void {
       startTerrainGeneration()
       hasStartedTerrainGeneration = true
       // Start counting for player teleport immediately after terrain generation starts
-      playerTeleportTimer = 0
       hasCompletedInitialization = true
     }
   }
   
   // Step 3: Teleport player after fixed delay (no model loading check)
-  if (hasStartedTerrainGeneration && !isPlayerTeleported) {
+  if (!isPlayerTeleported) {
     playerTeleportTimer += dt
     if (playerTeleportTimer >= PLAYER_TELEPORT_DELAY) {
       teleportPlayerToMainScene()
@@ -165,9 +162,26 @@ function startTerrainGeneration() {
   console.log(`Generated ${voxelPositions.length} voxels with the following settings:`)
   console.log(JSON.stringify(currentBiomeSettings))
 
-  // Set up the voxel system (without model loading system)
-  console.log('Setting up voxel rendering system')
-  createVoxelSystem(engine, voxelPositions, chunkManagerInstance, VISIBILITY_THRESHOLD, DEBUG)
+  // Set up the voxel system with grid and face visibility optimization
+  console.log('Setting up optimized voxel rendering system')
+  voxelSystemInstance = createVoxelSystem(
+    engine, 
+    voxelPositions, 
+    VISIBILITY_THRESHOLD,
+    DEBUG.MAX_ENTITIES,
+    DEBUG,
+    SPAWN_PARCEL_X_OFFSET
+  )
+  
+  // Preload voxels around the teleport location
+  // This ensures that when the player teleports, there will already be voxels visible
+  const centerX = MAIN_SCENE_POSITION.x
+  const centerY = 0 // Start at y=0 to load everything from the ground up
+  const centerZ = MAIN_SCENE_POSITION.z
+  const preloadRadius = 30 // Preload a larger area than the visibility threshold
+  
+  console.log(`Preloading voxels around teleport location (${centerX}, ${centerY}, ${centerZ})`)
+  voxelSystemInstance.preloadAroundLocation(centerX, centerY, centerZ, preloadRadius)
 
   // Mark terrain generation as started
   console.log('Minecraft voxel world terrain generation started!')
@@ -184,9 +198,6 @@ function regenerateTerrainWithSettings(settings: BiomeSettings) {
   // Clean up existing voxels
   cleanupExistingVoxels()
   
-  // Reset chunk manager
-  chunkManagerInstance = initChunkManager(CHUNK_SIZE)
-  
   // Create a new terrain generator with the new settings
   terrainGeneratorInstance = createTerrainGenerator(MAIN_SCENE_SIZE, DEBUG.MAX_LAYERS, settings)
   
@@ -195,37 +206,84 @@ function regenerateTerrainWithSettings(settings: BiomeSettings) {
   console.log(`Regenerated ${voxelPositions.length} voxels with custom settings`)
   
   // Create new voxel system
-  createVoxelSystem(engine, voxelPositions, chunkManagerInstance, VISIBILITY_THRESHOLD, DEBUG)
+  voxelSystemInstance = createVoxelSystem(
+    engine, 
+    voxelPositions, 
+    VISIBILITY_THRESHOLD,
+    DEBUG.MAX_ENTITIES,
+    DEBUG,
+    SPAWN_PARCEL_X_OFFSET
+  )
   
   console.log('Terrain regeneration complete!')
 }
 
 // Clean up existing voxels
 function cleanupExistingVoxels() {
-  // Get all voxel entities from chunk manager
-  const chunks = chunkManagerInstance.getChunks()
-  for (const chunkKey in chunks) {
-    const chunk = chunks[chunkKey]
-    // Remove all entities in this chunk
-    for (const entity of chunk.entities) {
+  if (voxelSystemInstance) {
+    // If we have active entities from the previous voxel system, remove them
+    voxelSystemInstance.activeEntities.forEach((entity: Entity) => {
       engine.removeEntity(entity)
-    }
-    // Clear the chunk's entity list
-    chunk.entities = []
+    })
   }
 }
 
 // Teleport the player to the main scene area
 function teleportPlayerToMainScene() {
   console.log('Step 3: Teleporting player to main scene')
+
+  // Calculate a safe height for the teleport pad
+  // Base terrain height (12) + variation (8) + tree height (7) + safety margin (5) = 32
+  // This ensures we're above the tallest possible terrain features
+  const safeHeight = 32
+
+  // Create a larger landing pad that stays longer
+  let teleportpad = engine.addEntity()
+  Transform.create(teleportpad, {
+    position: Vector3.create(96, safeHeight, 80),
+    rotation: Quaternion.fromEulerDegrees(90, 0, 0),
+    scale: Vector3.create(100, 100, 1) // Larger pad to ensure player doesn't miss it
+  })
   
-  // Use Decentraland's movePlayerTo function to teleport the player
+  MeshRenderer.setPlane(teleportpad) // Make it visible so players can see where they're landing
+  Material.setPbrMaterial(teleportpad, {
+    albedoColor: { r: 0.2, g: 0.8, b: 0.8, a: 0.7 } // Transparent blue
+  })
+  MeshCollider.setPlane(teleportpad)
+
+  // Teleport the player to the safe height
   movePlayerTo({
-    newRelativePosition: MAIN_SCENE_POSITION
+    newRelativePosition: {
+      x: MAIN_SCENE_POSITION.x,
+      y: safeHeight + 2, // Place player slightly above the pad
+      z: MAIN_SCENE_POSITION.z
+    }
   })
   
   console.log('Player teleported to main scene')
   toggleSplashScreen()
+  
+  // After teleporting, trigger one more preload around the player position
+  // to ensure nearest voxels are loaded before removing the teleport pad
+  utils.timers.setTimeout(() => {
+    // The player may have moved, so get current position for accurate preloading
+    const playerTransform = Transform.getMutableOrNull(engine.PlayerEntity)
+    if (playerTransform) {
+      console.log('Preloading voxels around player\'s current position')
+      voxelSystemInstance.preloadAroundLocation(
+        playerTransform.position.x,
+        playerTransform.position.y - 10, // Preload below the player
+        playerTransform.position.z,
+        20 // Smaller radius for more focused loading
+      )
+    }
+    
+    // Set a timer to remove the teleport pad after sufficient time
+    utils.timers.setTimeout(() => {
+      console.log('Removing teleport pad')
+      engine.removeEntity(teleportpad)
+    }, 30000) // 15 more seconds after preloading
+  }, 5000) // Wait 5 seconds after teleport before preloading
   
   // Show biome settings hint
   if (BIOME_CUSTOMIZATION_ENABLED) {

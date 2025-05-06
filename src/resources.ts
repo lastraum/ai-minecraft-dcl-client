@@ -3,7 +3,8 @@ export let slug = 'lastslice-voxel-world'
 // Debug settings
 export const DEBUG = {
   ALWAYS_VISIBLE: true, // Set to true to make all voxels visible regardless of distance
-  MAX_LAYERS: 0        // Maximum number of vertical layers to generate (for performance testing)
+  MAX_LAYERS: 0,        // Maximum number of vertical layers to generate (for performance testing)
+  MAX_ENTITIES: 25000   // Maximum number of voxel entities to create at once - increased for better coverage
 }
 
 // Scene configuration
@@ -11,13 +12,19 @@ export const MAIN_SCENE_SIZE = 160 // 160x160 voxel grid for main scene (10x10 p
 export const CHUNK_SIZE = 4 // 4x4x4 chunks
 export const VISIBILITY_THRESHOLD = 20 // Increased visibility threshold for larger scene
 
+// Chunk loading configuration
+export const HORIZONTAL_VISIBILITY_THRESHOLD = 30 // Larger threshold for horizontal chunks
+export const VERTICAL_VISIBILITY_THRESHOLD = 15 // Smaller threshold for vertical chunks
+export const HORIZONTAL_PRIORITY_FACTOR = 0.5 // Lower weight for horizontal distance (prioritize horizontal loading)
+
 // Scene positions
 export const SPAWN_POSITION = {x: 8, y: 0, z: 8} // Center of spawn parcel (-1,0)
-export const MAIN_SCENE_POSITION = {x: 80, y: 80, z: 80} // Center of the 10x10 grid
+export const MAIN_SCENE_POSITION = {x: 96, y: 80, z: 80} // Center of the 10x10 grid
+export const SPAWN_PARCEL_X_OFFSET = 16 // The X offset (in meters) for the spawn parcel
 
 // Timing configuration (in seconds)
-export const TERRAIN_GENERATION_DELAY = 15 // Wait 1 second before generating terrain
-export const PLAYER_TELEPORT_DELAY = 30 // Wait 5 seconds before teleporting player
+export const TERRAIN_GENERATION_DELAY = 20 // Wait 1 second before generating terrain
+export const PLAYER_TELEPORT_DELAY = 15 // Wait 5 seconds before teleporting player
 
 // Biome Settings Configuration
 export const BIOME_CONFIG = {
@@ -80,5 +87,18 @@ export const UI_CONFIG = {
 
 // Key to enable/disable biome customization feature
 export const BIOME_CUSTOMIZATION_ENABLED = true
+
+// Model paths for block types
+export const MODEL_PATHS = {
+  'grass': 'models/grass.glb',
+  'dirt': 'models/dirt.glb',
+  'stone_dark': 'models/stone_dark.glb',
+  'sand': 'models/sand.glb',
+  'wood': 'models/woodplanks.glb',
+  'leaves': 'models/leaves.glb',
+  'wood_plank_light_red': 'models/wood_plank_light_red.glb',
+  'wood_plank_dark': 'models/wood_plank_dark.glb',
+  'water': 'models/water.glb'
+}
 
 

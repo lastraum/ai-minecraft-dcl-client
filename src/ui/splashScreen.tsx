@@ -1,10 +1,10 @@
 import ReactEcs, {Dropdown, Input, UiEntity} from '@dcl/sdk/react-ecs'
 import { slug } from '../resources';
 
-let show = true
+let show = false
 
 export function toggleSplashScreen(){
-    show = !show
+    // show = !show
 }
 
 export function createSplashScreen(){
