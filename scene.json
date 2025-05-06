@@ -15,8 +15,14 @@
   "main": "bin/index.js",
   "tags": ["minecraft", "voxel", "game"],
   "scene": {
-    "parcels": ["0,0"],
-    "base": "0,0"
+    "parcels": [
+      "-1,0", 
+      "0,0", 
+      "0,1", 
+      "1,0", 
+      "1,1"
+    ],
+    "base": "-1,0"
   },
   "spawnPoints": [
     {
@@ -24,12 +30,12 @@
       "default": true,
       "position": {
         "x": 8,
-        "y": 80,
-        "z": 8
+        "y": 0,
+        "z":8
       },
       "cameraTarget": {
         "x": 8,
-        "y": 20,
+        "y": 0,
         "z": 8
       }
     }

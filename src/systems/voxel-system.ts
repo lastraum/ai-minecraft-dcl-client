@@ -2,7 +2,6 @@ import { engine, Entity, GltfContainer, Transform, VisibilityComponent } from '@
 import { Vector3 } from '@dcl/sdk/math'
 import { VoxelPosition, BlockType } from '../terrain/terrain-generator'
 import { Chunk } from './chunk-manager'
-import { trackModelLoading } from './model-loading-system'
 
 // Define the interface for the chunk manager
 interface ChunkManager {
@@ -64,9 +63,6 @@ export function createVoxelSystem(
     VisibilityComponent.create(entity, {
       visible: false
     })
-    
-    // Track this entity for model loading
-    trackModelLoading(entity)
     
     // Add to appropriate chunk
     chunkManager.addEntityToChunk(entity, pos)
