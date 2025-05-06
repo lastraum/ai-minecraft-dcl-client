@@ -1,0 +1,15 @@
+{
+  "name": "minecraft-voxel-world",
+  "version": "1.0.0",
+  "description": "A Minecraft-like voxel world in Decentraland",
+  "scripts": {
+    "start": "sdk-commands start",
+    "build": "sdk-commands build",
+    "deploy": "sdk-commands deploy",
+    "upgrade-sdk": "npm install --save-dev @dcl/sdk@latest"
+  },
+  "devDependencies": {
+    "@dcl/js-runtime": "7.3.0",
+    "@dcl/sdk": "^7.3.0"
+  }
+} 

@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "outFile": "./bin/index.js",
+    "allowJs": true,
+    "strict": true,
+    "paths": {
+      "@dcl/sdk/ecs": ["./node_modules/@dcl/sdk/ecs"],
+      "@dcl/sdk/math": ["./node_modules/@dcl/sdk/math"]
+    },
+    "baseUrl": "."
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "extends": "./node_modules/@dcl/sdk/types/tsconfig.json"
+} 
