@@ -1,22 +1,24 @@
-import { engine, GltfContainer, Entity } from '@dcl/sdk/ecs'
+import { engine, GltfContainer, Entity, GltfContainerLoadingState } from '@dcl/sdk/ecs'
 
 // Stores model loading status
 interface ModelLoadingState {
-  totalModels: number
-  loadingStartTime: number
+  trackedEntities: Entity[]
   isComplete: boolean
   onComplete?: () => void
+  checkInterval: number
+  timeSinceLastCheck: number
 }
 
 // Current loading state
 const state: ModelLoadingState = {
-  totalModels: 0,
-  loadingStartTime: 0,
-  isComplete: false
+  trackedEntities: [],
+  isComplete: false,
+  checkInterval: 1, // Check every 1 second
+  timeSinceLastCheck: 0
 }
 
-// Loading timeout in milliseconds (models should load within this time)
-const LOADING_TIMEOUT = 5000 // 5 seconds
+// Maximum time to wait for models to load before giving up (in seconds)
+const LOADING_MAX_TIMEOUT = 20 // 20 seconds
 
 /**
  * Initializes the model loading tracking system
@@ -27,32 +29,91 @@ export function initModelLoadingSystem(onAllModelsLoaded?: () => void): void {
   state.onComplete = onAllModelsLoaded
   
   // Reset the state
-  state.totalModels = 0
+  state.trackedEntities = []
   state.isComplete = false
-  state.loadingStartTime = Date.now()
+  state.timeSinceLastCheck = 0
 
   console.log('Model loading system initialized')
   
-  // Add system to check if enough time has passed for models to load
-  engine.addSystem(checkModelLoadingTimeout)
+  // Add system to check model loading states
+  engine.addSystem(checkModelLoadingStates)
 }
 
 /**
- * System that uses a timeout to determine when models are likely loaded
+ * System that checks the loading status of tracked GLTF models
  */
-function checkModelLoadingTimeout(): void {
+function checkModelLoadingStates(dt: number): void {
+  // Skip if already complete
   if (state.isComplete) return
   
-  // Check if we've passed the loading timeout
-  const elapsed = Date.now() - state.loadingStartTime
+  // Check periodically rather than every frame
+  state.timeSinceLastCheck += dt
+  if (state.timeSinceLastCheck < state.checkInterval) return
   
-  if (elapsed > LOADING_TIMEOUT) {
-    console.log(`Model loading timeout reached (${LOADING_TIMEOUT}ms)`)
+  // Reset interval timer
+  state.timeSinceLastCheck = 0
+  
+  // Log the number of tracked entities
+  if (state.trackedEntities.length > 0) {
+    console.log(`Checking loading status of ${state.trackedEntities.length} models...`)
+  }
+  
+  // Track loading stats
+  let totalEntities = state.trackedEntities.length
+  let loadedEntities = 0
+  let errorEntities = 0
+  let unknownEntities = 0
+  
+  // Stop tracking entities that no longer exist
+  state.trackedEntities = state.trackedEntities.filter(entity => 
+    GltfContainer.has(entity)
+  )
+  
+  // Check loading state of each entity
+  for (const entity of state.trackedEntities) {
+    const loadingState = GltfContainerLoadingState.getOrNull(entity)
     
-    if (!state.isComplete && state.onComplete) {
-      state.isComplete = true
-      state.onComplete()
+    // Skip if no loading state component
+    if (!loadingState) continue
+    
+    // Track loading state based on currentState value
+    const currentState = loadingState.currentState
+    
+    if (currentState === 2) { // FINISHED
+      loadedEntities++
+    } else if (currentState === 3) { // FINISHED_WITH_ERROR
+      errorEntities++
+      loadedEntities++ // Count errors as "loaded" since they won't change
+    } else if (currentState === 0) { // UNKNOWN
+      unknownEntities++
     }
+    // LOADING (1) state doesn't need special handling, just waiting
+  }
+  
+  // Handle case when all entities are loaded (or had errors)
+  if (loadedEntities >= totalEntities && totalEntities > 0) {
+    console.log(`All models loaded! (${loadedEntities}/${totalEntities}, with ${errorEntities} errors)`)
+    completeLoading()
+  } else if (totalEntities > 0) {
+    // Log progress
+    const percentComplete = Math.floor((loadedEntities / totalEntities) * 100)
+    console.log(`Loading progress: ${loadedEntities}/${totalEntities} models (${percentComplete}%)`)
+    
+    // Check if we've been running too long and need to time out
+    if (state.timeSinceLastCheck > LOADING_MAX_TIMEOUT) {
+      console.log(`Loading timed out after ${LOADING_MAX_TIMEOUT} seconds. Some models may not have loaded correctly.`)
+      completeLoading()
+    }
+  }
+}
+
+/**
+ * Complete the loading process and trigger callback
+ */
+function completeLoading(): void {
+  if (!state.isComplete && state.onComplete) {
+    state.isComplete = true
+    state.onComplete()
   }
 }
 
@@ -61,7 +122,7 @@ function checkModelLoadingTimeout(): void {
  * @param entity The entity with GltfContainer
  */
 export function trackModelLoading(entity: Entity): void {
-  if (GltfContainer.has(entity)) {
-    state.totalModels++
+  if (GltfContainer.has(entity) && !state.trackedEntities.includes(entity)) {
+    state.trackedEntities.push(entity)
   }
 } 

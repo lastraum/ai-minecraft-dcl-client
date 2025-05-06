@@ -8,7 +8,7 @@ import { initModelLoadingSystem } from './systems/model-loading-system'
 // Scene configuration
 const SCENE_SIZE = 16 // 16x16x16 voxel grid
 const CHUNK_SIZE = 4 // 4x4x4 chunks
-const VISIBILITY_THRESHOLD = 16 // 16m visibility threshold
+const VISIBILITY_THRESHOLD = 5 // 16m visibility threshold
 
 // Timing configuration (in seconds)
 const SPAWN_PLANE_SETUP_DELAY = 0 // Wait 0 second for spawn plane to load
