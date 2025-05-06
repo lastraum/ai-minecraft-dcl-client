@@ -1,11 +1,13 @@
 {
+  "ecs7": true,
+  "runtimeVersion": "7",
   "display": {
     "title": "Minecraft Voxel World",
     "description": "A Minecraft-like voxel world in Decentraland",
     "navmapThumbnail": "assets/thumbnail.png",
     "favicon": "assets/favicon.ico"
   },
-  "owner": "",
+  "owner": "Last Slice",
   "contact": {
     "name": "Last Slice",
     "email": ""
@@ -31,5 +33,11 @@
         "z": 8
       }
     }
-  ]
+  ],
+  "requiredPermissions": [
+    "ALLOW_TO_MOVE_PLAYER_INSIDE_SCENE"
+  ],
+  "featureToggles": {
+    "voiceChat": "enabled"
+  }
 } 

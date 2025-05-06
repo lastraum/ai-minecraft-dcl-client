@@ -50,8 +50,13 @@ export function createVoxelSystem(
     })
     
     // Add Transform component (position)
+    // Apply a 0.5 offset in each direction to account for the center origin of the GLB model
     Transform.create(entity, {
-      position: Vector3.create(pos.x, pos.y, pos.z)
+      position: Vector3.create(
+        pos.x + 0.5, 
+        pos.y + 0.5, 
+        pos.z + 0.5
+      )
     })
     
     // Add VisibilityComponent (initially invisible)
@@ -71,9 +76,12 @@ export function createVoxelSystem(
   // Create a system that runs every frame to update visibility
   const visibilitySystem = () => {
     // Get player's position
-    const playerPos = Transform.get(engine.PlayerEntity).position
-    
-    // Loop through all chunks to check visibility
+    const playerTransform = Transform.getMutableOrNull(engine.PlayerEntity)
+    if (!playerTransform) {
+      return
+    }
+    const playerPos = playerTransform.position
+    // Loop through all chunks to check visibility///
     for (const chunkKey in chunks) {
       const chunk = chunks[chunkKey]
       

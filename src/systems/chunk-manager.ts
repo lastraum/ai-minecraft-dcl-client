@@ -49,7 +49,8 @@ export function initChunkManager(chunkSize: number) {
         // Parse the chunk coordinates from the key
         const [x, y, z] = key.split(',').map(Number)
         
-        // Calculate chunk center for distance checks
+        // Calculate chunk center with the 0.5 offset applied
+        // For a chunk of size 4, the center would be at position (x*4 + 2, y*4 + 2, z*4 + 2)
         const centerX = x * chunkSize + chunkSize / 2
         const centerY = y * chunkSize + chunkSize / 2
         const centerZ = z * chunkSize + chunkSize / 2
