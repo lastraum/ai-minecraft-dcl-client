@@ -9,19 +9,29 @@ interface ChunkManager {
   addEntityToChunk(entity: Entity, position: VoxelPosition): void
 }
 
+// Debug interface
+interface DebugSettings {
+  ALWAYS_VISIBLE?: boolean
+}
+
 /**
  * Creates and sets up the voxel system
  * @param engine The Decentraland engine instance
  * @param voxelPositions Array of voxel positions from the terrain generator
  * @param chunkManager The chunk manager instance
  * @param visibilityThreshold Maximum distance for voxel visibility (in meters)
+ * @param debug Optional debug settings to override default behavior
  */
 export function createVoxelSystem(
   _engine: any,
   voxelPositions: VoxelPosition[],
   chunkManager: ChunkManager,
-  visibilityThreshold: number
+  visibilityThreshold: number,
+  debug?: DebugSettings
 ) {
+  // Debug flags
+  const alwaysVisible = debug?.ALWAYS_VISIBLE || false
+  
   // Block type model mapping
   const modelPaths: Record<BlockType, string> = {
     [BlockType.GRASS]: 'models/grass.glb',
@@ -59,9 +69,9 @@ export function createVoxelSystem(
       )
     })
     
-    // Add VisibilityComponent (initially invisible)
+    // Add VisibilityComponent (initially invisible or based on debug flag)
     VisibilityComponent.create(entity, {
-      visible: false
+      visible: alwaysVisible
     })
     
     // Add to appropriate chunk
@@ -73,37 +83,41 @@ export function createVoxelSystem(
   console.log(`Created ${Object.keys(chunks).length} chunks`)
   console.log(`Block counts: Grass: ${blockCounts[BlockType.GRASS]}, Dirt: ${blockCounts[BlockType.DIRT]}, Stone: ${blockCounts[BlockType.STONE_DARK]}`)
   
-  // Create a system that runs every frame to update visibility
-  const visibilitySystem = () => {
-    // Get player's position
-    const playerTransform = Transform.getMutableOrNull(engine.PlayerEntity)
-    if (!playerTransform) {
-      return
-    }
-    const playerPos = playerTransform.position
-    // Loop through all chunks to check visibility/// 
-    for (const chunkKey in chunks) {
-      const chunk = chunks[chunkKey]
-      
-      // Calculate distance from player to chunk center
-      const distance = Vector3.distance(playerPos, chunk.center)
-      
-      // Determine if this chunk should be visible
-      const visible = distance < visibilityThreshold
-      
-      // Update visibility for all entities in this chunk
-      for (const entity of chunk.entities) {
-        // Only update if needed (to avoid unnecessary updates)
-        const visibilityComponent = VisibilityComponent.getMutable(entity)
-        if (visibilityComponent.visible !== visible) {
-          visibilityComponent.visible = visible
+  if (alwaysVisible) {
+    console.log('DEBUG: Visibility toggle disabled - all voxels are always visible')
+  } else {
+    // Create a system that runs every frame to update visibility
+    const visibilitySystem = () => {
+      // Get player's position
+      const playerTransform = Transform.getMutableOrNull(engine.PlayerEntity)
+      if (!playerTransform) {
+        return
+      }
+      const playerPos = playerTransform.position
+      // Loop through all chunks to check visibility/// 
+      for (const chunkKey in chunks) {
+        const chunk = chunks[chunkKey]
+        
+        // Calculate distance from player to chunk center
+        const distance = Vector3.distance(playerPos, chunk.center)
+        
+        // Determine if this chunk should be visible
+        const visible = distance < visibilityThreshold
+        
+        // Update visibility for all entities in this chunk
+        for (const entity of chunk.entities) {
+          // Only update if needed (to avoid unnecessary updates)
+          const visibilityComponent = VisibilityComponent.getMutable(entity)
+          if (visibilityComponent.visible !== visible) {
+            visibilityComponent.visible = visible
+          }
         }
       }
     }
+    
+    // Add the visibility system to the engine
+    engine.addSystem(visibilitySystem)
   }
-  
-  // Add the visibility system to the engine
-  engine.addSystem(visibilitySystem)
   
   console.log('Voxel system initialized')
 } 

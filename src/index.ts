@@ -4,19 +4,7 @@ import { createVoxelSystem } from './systems/voxel-system'
 import { createTerrainGenerator } from './terrain/terrain-generator'
 import { initChunkManager } from './systems/chunk-manager'
 import { movePlayerTo } from '~system/RestrictedActions'
-
-// Scene configuration
-const MAIN_SCENE_SIZE = 32 // 32x32 voxel grid for main scene (2x2 parcels)
-const CHUNK_SIZE = 4 // 4x4x4 chunks
-const VISIBILITY_THRESHOLD = 5 // Increased visibility threshold for larger scene
-
-// Scene positions
-const SPAWN_POSITION = Vector3.create(8, 0, 8) // Center of spawn parcel (-1,0)
-const MAIN_SCENE_POSITION = {x: 16, y: 30, z: 16}
-
-// Timing configuration (in seconds)
-const TERRAIN_GENERATION_DELAY = 1 // Wait 1 second before generating terrain
-const PLAYER_TELEPORT_DELAY = 15 // Wait 5 seconds before teleporting player
+import { CHUNK_SIZE, MAIN_SCENE_SIZE, DEBUG, TERRAIN_GENERATION_DELAY, PLAYER_TELEPORT_DELAY, VISIBILITY_THRESHOLD, SPAWN_POSITION, MAIN_SCENE_POSITION } from './resources'
 
 // Track timing for delays
 let terrainGenerationTimer = 0
@@ -47,7 +35,7 @@ function setupScene() {
   console.log('Step 1: Setting up scene')
   
   // Initialize managers
-  terrainGeneratorInstance = createTerrainGenerator(MAIN_SCENE_SIZE)
+  terrainGeneratorInstance = createTerrainGenerator(MAIN_SCENE_SIZE, DEBUG.MAX_LAYERS)
   chunkManagerInstance = initChunkManager(CHUNK_SIZE)
   
   // Create a simple flat ground for the spawn area
@@ -59,18 +47,18 @@ function createSpawnAreaGround() {
   console.log('Creating spawn area ground')
   
   // Create a ground platform entity
-//   const groundEntity = engine.addEntity()
-//   Transform.create(groundEntity, {
-//     position: Vector3.create(-8, 0, -8), // Center of spawn parcel
-//     scale: Vector3.create(16, 0.1, 16),  // 16x16 meter platform
-//   })
+  const groundEntity = engine.addEntity()
+  Transform.create(groundEntity, {
+    position: Vector3.create(8,0,8), // Center of spawn parcel
+    scale: Vector3.create(16, 16, 1),  // 16x16 meter platform
+    rotation: Quaternion.fromEulerDegrees(90, 0, 0)
+  })
   
-//   // Add mesh, material and collider
-//   MeshRenderer.setPlane(groundEntity)
-//   Material.setPbrMaterial(groundEntity, {
-//     albedoColor: { r: 0.2, g: 0.8, b: 0.2, a: 1.0 }, // Green color
-//   })
-//   MeshCollider.setPlane(groundEntity)
+  // Add mesh, material and collider
+  MeshRenderer.setPlane(groundEntity)
+  Material.setPbrMaterial(groundEntity, {
+    albedoColor: { r: 0.2, g: 0.8, b: 0.2, a: 1.0 }, // Green color
+  })
   
   // Add a sign to inform the player
   createInformationSign()
@@ -137,7 +125,7 @@ function startTerrainGeneration() {
 
   // Set up the voxel system (without model loading system)
   console.log('Setting up voxel rendering system')
-  createVoxelSystem(engine, voxelPositions, chunkManagerInstance, VISIBILITY_THRESHOLD)
+  createVoxelSystem(engine, voxelPositions, chunkManagerInstance, VISIBILITY_THRESHOLD, DEBUG)
 
   // Mark terrain generation as started
   console.log('Minecraft voxel world terrain generation started!')
