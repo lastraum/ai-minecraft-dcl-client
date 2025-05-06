@@ -12,10 +12,10 @@ export const VISIBILITY_THRESHOLD = 5 // Increased visibility threshold for larg
 
 // Scene positions
 export const SPAWN_POSITION = {x: 8, y: 0, z: 8} // Center of spawn parcel (-1,0)
-export const MAIN_SCENE_POSITION = {x: 16, y: 30, z: 16}
+export const MAIN_SCENE_POSITION = {x: 34, y: 30, z: 14}
 
 // Timing configuration (in seconds)
-export const TERRAIN_GENERATION_DELAY = 1 // Wait 1 second before generating terrain
+export const TERRAIN_GENERATION_DELAY = 10 // Wait 1 second before generating terrain
 export const PLAYER_TELEPORT_DELAY = 15 // Wait 5 seconds before teleporting player
 
 

@@ -1,4 +1,4 @@
-import { engine, Entity, GltfContainer, Transform, VisibilityComponent } from '@dcl/sdk/ecs'
+import { ColliderLayer, engine, Entity, GltfContainer, Transform, VisibilityComponent } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
 import { VoxelPosition, BlockType } from '../terrain/terrain-generator'
 import { Chunk } from './chunk-manager'
@@ -56,7 +56,9 @@ export function createVoxelSystem(
     
     // Add GltfContainer component (model) based on block type
     GltfContainer.create(entity, {
-      src: modelPaths[pos.type]
+      src: modelPaths[pos.type],
+      invisibleMeshesCollisionMask:ColliderLayer.CL_NONE,
+      visibleMeshesCollisionMask:ColliderLayer.CL_PHYSICS | ColliderLayer.CL_POINTER,
     })
     
     // Add Transform component (position)
