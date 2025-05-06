@@ -19,55 +19,106 @@ export enum BlockType {
   WATER = 'water'
 }
 
+// Define biome settings interface for user customization
+export interface BiomeSettings {
+  // Beach settings
+  beachSize: number; // 0.0 to 1.0 - percentage of map for beach
+  
+  // Lake settings
+  lakeEnabled: boolean;
+  lakeSize: number; // 0.0 to 1.0 - size of the lake
+  lakeDepth: number; // Water depth in blocks
+  
+  // Forest settings
+  treeDensity: number; // 0.0 to 1.0 - probability of tree placement
+  
+  // Cabin settings
+  cabinsEnabled: boolean;
+  cabinDensity: number; // 0.0 to 1.0 - probability of cabin placement in suitable areas
+  
+  // Terrain settings
+  terrainHeight: number; // Base height of terrain
+  terrainVariation: number; // Variation factor for sine wave amplitude
+}
+
+// Default biome settings
+export const DEFAULT_BIOME_SETTINGS: BiomeSettings = {
+  beachSize: 0.3,
+  lakeEnabled: true,
+  lakeSize: 0.2,
+  lakeDepth: 6,
+  treeDensity: 0.03,
+  cabinsEnabled: true,
+  cabinDensity: 0.7,
+  terrainHeight: 8,
+  terrainVariation: 4
+}
+
 /**
  * Creates a terrain generator for the scene
  * @param sceneSize The size of the scene (width and depth)
  * @param maxLayers Optional maximum number of vertical layers to generate (for performance testing)
+ * @param biomeSettings Optional customization settings for biomes
  * @returns A terrain generator object
  */
-export function createTerrainGenerator(sceneSize: number, maxLayers?: number) {
+export function createTerrainGenerator(
+  sceneSize: number, 
+  maxLayers?: number,
+  biomeSettings: BiomeSettings = DEFAULT_BIOME_SETTINGS
+) {
   return {
     /**
      * Generates a sine-based heightmap terrain
-     * Uses the formula: height = 8 + 4 * Math.sin(x / 4) + 4 * Math.sin(z / 4)
-     * Creates a wavy terrain with heights ranging roughly from 4 to 12
+     * Uses the formula: height = baseHeight + variation * Math.sin(x / 4) + variation * Math.sin(z / 4)
+     * Creates a wavy terrain with varied heights
      * @returns An array of voxel positions
      */
-    generateTerrain(): VoxelPosition[] {
+    generateTerrain(customSettings?: Partial<BiomeSettings>): VoxelPosition[] {
+      // Merge any custom settings provided at generation time
+      const settings = {...biomeSettings, ...customSettings};
       const voxelPositions: VoxelPosition[] = []
       
       // When maxLayers is set, we'll limit the terrain height for performance testing
       const useMaxLayers = maxLayers !== undefined && maxLayers > 0
       console.log(`Terrain generator: ${useMaxLayers ? 'Using max layers: ' + maxLayers : 'No height limit'}`)
+      console.log(`Using biome settings: Beach size: ${settings.beachSize}, Tree density: ${settings.treeDensity}`)
       
-      // Generate terrain for the 2x2 parcel grid (32x32 voxels)
-      // The 2x2 parcel grid starts at x=16, z=0 (accounting for the base parcel at -1,0)
+      // Generate terrain for the 10x10 parcel grid (160x160 voxels)
+      // The SW corner of the main scene starts at x=0, z=0 (with the spawn parcel at -1,0)
       for (let localX = 0; localX < sceneSize; localX++) {
         for (let localZ = 0; localZ < sceneSize; localZ++) {
           // Convert local coordinates to world coordinates 
-          // Since base parcel is at (-1,0), we start at x=16
-          const worldX = localX + 16;
+          const worldX = localX;
           const worldZ = localZ;
           
           // Calculate height using sine waves for natural-looking terrain
-          const height = Math.floor(8 + 4 * Math.sin(localX / 4) + 4 * Math.sin(localZ / 4));
+          // Use a larger divisor for more gradual terrain in the larger scene
+          const height = Math.floor(
+            settings.terrainHeight + 
+            settings.terrainVariation * Math.sin(localX / 16) + 
+            settings.terrainVariation * Math.sin(localZ / 16)
+          );
           
           // Apply max layers constraint if set
           const effectiveHeight = useMaxLayers ? Math.min(height, maxLayers!) : height;
           
           // Determine biome type based on local coordinates
           // Simple beach/forest/lake biome transition
-          const isBeach = localX < sceneSize * 0.3 || localZ < sceneSize * 0.3;
-          const isLake = localX > sceneSize * 0.65 && localX < sceneSize * 0.85 && 
-                         localZ > sceneSize * 0.65 && localZ < sceneSize * 0.85;
+          const isBeach = localX < sceneSize * settings.beachSize || localZ < sceneSize * settings.beachSize;
           
-          // Set water level for lake
-          const waterLevel = 6;
+          // Calculate lake center position based on settings
+          const lakeCenterX = sceneSize * (0.75 - settings.lakeSize/4);
+          const lakeCenterZ = sceneSize * (0.75 - settings.lakeSize/4);
+          const lakeRadius = sceneSize * settings.lakeSize;
+          
+          // Determine if this position is within the lake
+          const isLake = settings.lakeEnabled && 
+                     Math.pow(localX - lakeCenterX, 2) + Math.pow(localZ - lakeCenterZ, 2) <= Math.pow(lakeRadius, 2);
           
           // Place lake water if in lake biome
           if (isLake) {
             // Place water from y=0 up to waterLevel
-            for (let y = 0; y <= waterLevel; y++) {
+            for (let y = 0; y <= settings.lakeDepth; y++) {
               // Bottom of lake is sand
               if (y === 0) {
                 voxelPositions.push({ x: worldX, y, z: worldZ, type: BlockType.SAND });
@@ -102,8 +153,8 @@ export function createTerrainGenerator(sceneSize: number, maxLayers?: number) {
                 type = BlockType.STONE_DARK // Everything below is stone
               }
               
-              // Randomly place trees in forest biome
-              if (y === effectiveHeight && Math.random() < 0.03) {
+              // Randomly place trees in forest biome based on treeDensity setting
+              if (y === effectiveHeight && Math.random() < settings.treeDensity) {
                 // Place tree trunk (4 blocks high)
                 for (let treeY = 1; treeY <= 4; treeY++) {
                   voxelPositions.push({ 
@@ -133,10 +184,11 @@ export function createTerrainGenerator(sceneSize: number, maxLayers?: number) {
               }
               
               // Randomly place cabins in the forest (away from the beach edge)
-              if (y === effectiveHeight && 
+              if (settings.cabinsEnabled && 
+                  y === effectiveHeight && 
                   localX > sceneSize * 0.4 && localX < sceneSize * 0.6 && 
                   localZ > sceneSize * 0.4 && localZ < sceneSize * 0.6 && 
-                  Math.random() < 0.7) {
+                  Math.random() < settings.cabinDensity) {
                 
                 // Simple cabin floor - 3x3 dark wood planks
                 for (let fx = -1; fx <= 1; fx++) {
