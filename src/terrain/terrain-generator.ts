@@ -1,8 +1,16 @@
-// Define the voxel position interface
+// Define the voxel position interface with block type
 export interface VoxelPosition {
   x: number
   y: number
   z: number
+  type: BlockType
+}
+
+// Define block types
+export enum BlockType {
+  GRASS = 'grass',
+  DIRT = 'dirt',
+  STONE = 'stone'
 }
 
 /**
@@ -30,7 +38,21 @@ export function createTerrainGenerator(sceneSize: number) {
           
           // Place voxels from y=0 up to the calculated height
           for (let y = 0; y <= height; y++) {
-            voxelPositions.push({ x, y, z })
+            // Determine block type based on height:
+            // - Top layer is grass
+            // - Next 3 layers are dirt
+            // - Everything below is stone
+            let type: BlockType
+            
+            if (y === height) {
+              type = BlockType.GRASS // Top layer is grass
+            } else if (y > height - 4) {
+              type = BlockType.DIRT // Next 3 layers are dirt
+            } else {
+              type = BlockType.STONE // Everything below is stone
+            }
+            
+            voxelPositions.push({ x, y, z, type })
           }
         }
       }
