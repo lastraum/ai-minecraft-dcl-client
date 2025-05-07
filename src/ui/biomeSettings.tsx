@@ -1,4 +1,4 @@
-import { BiomeSettings, DEFAULT_BIOME_SETTINGS } from '../terrain/terrain-generator'
+import { BiomeSettings, DEFAULT_BIOME_SETTINGS } from '../resources'
 import { Color4 } from '@dcl/sdk/math'
 import { slug } from '../resources'
 import ReactEcs, { UiEntity } from '@dcl/sdk/react-ecs'

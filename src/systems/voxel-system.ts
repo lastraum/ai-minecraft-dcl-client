@@ -1,6 +1,7 @@
 import { ColliderLayer, engine, Entity, GltfContainer, Transform, VisibilityComponent } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
-import { VoxelPosition, BlockType } from '../terrain/terrain-generator'
+import { VoxelPosition, BlockType } from '../resources'
+import { HORIZONTAL_VISIBILITY_THRESHOLD, VERTICAL_VISIBILITY_THRESHOLD } from '../resources'
 
 // Define the grid cell interface
 interface GridCell {
@@ -161,10 +162,9 @@ export function createVoxelSystem(
     
     // Add Transform component (position)
     // Apply a 0.5 offset in each direction to account for the center origin of the GLB model
-    // Add 16 to X to account for the spawn parcel offset
     Transform.create(entity, {
       position: Vector3.create(
-        cell.position.x + 0.5 + spawnParcelOffset, // Add 16 to X for spawn parcel offset
+        cell.position.x + 0.5, // No spawn parcel offset needed
         cell.position.y + 0.5, 
         cell.position.z + 0.5
       )
@@ -212,14 +212,26 @@ export function createVoxelSystem(
     
     // Calculate distance from player to voxel
     const cellPos = Vector3.create(
-      cell.position.x + 0.5 + spawnParcelOffset, // Add 16 to X for spawn parcel offset
+      cell.position.x + 0.5,
       cell.position.y + 0.5,
       cell.position.z + 0.5
     )
-    const distance = Vector3.distance(playerPos, cellPos)
     
-    // Only visible if within threshold distance
-    return distance < visibilityThreshold
+    // Calculate horizontal and vertical distances separately
+    const horizontalDistance = Math.sqrt(
+      Math.pow(playerPos.x - cellPos.x, 2) + 
+      Math.pow(playerPos.z - cellPos.z, 2)
+    )
+    const verticalDistance = Math.abs(playerPos.y - cellPos.y)
+    
+    // Debug logging for cells near the edge of visibility
+    if (horizontalDistance > HORIZONTAL_VISIBILITY_THRESHOLD * 0.8) {
+      console.log(`Cell at (${cellPos.x}, ${cellPos.y}, ${cellPos.z}) - Horizontal distance: ${horizontalDistance}, Vertical distance: ${verticalDistance}`)
+    }
+    
+    // Use different thresholds for horizontal and vertical visibility
+    return horizontalDistance < HORIZONTAL_VISIBILITY_THRESHOLD && 
+           verticalDistance < VERTICAL_VISIBILITY_THRESHOLD
   }
   
   // Create a system that updates visibility and manages entities
@@ -228,17 +240,30 @@ export function createVoxelSystem(
       // Get player's position
       const playerTransform = Transform.getMutableOrNull(engine.PlayerEntity)
       if (!playerTransform) {
+        console.log('No player transform found')
         return
       }
       const playerPos = playerTransform.position
+      
+      // Always log player position for debugging
+      console.log(`Player position: (${playerPos.x}, ${playerPos.y}, ${playerPos.z})`)
       
       // Track entities to be made visible and invisible
       const cellsToMakeVisible: GridCell[] = []
       const cellsToMakeInvisible: GridCell[] = []
       
+      // Log grid statistics
+      let totalCells = 0
+      let cellsWithEntities = 0
+      let cellsInRange = 0
+      
       // Determine which cells should be visible or invisible
       grid.forEach(cell => {
+        totalCells++
+        if (cell.entity) cellsWithEntities++
+        
         const shouldBeVisibleNow = shouldBeVisible(cell, playerPos)
+        if (shouldBeVisibleNow) cellsInRange++
         
         if (shouldBeVisibleNow && !cell.entity) {
           // Cell should be visible but has no entity
@@ -249,10 +274,21 @@ export function createVoxelSystem(
         }
       })
       
+      // Log grid statistics
+      console.log(`Grid stats: Total=${totalCells}, WithEntities=${cellsWithEntities}, InRange=${cellsInRange}`)
+      
       // Sort cells to make visible by distance to player (closest first)
       cellsToMakeVisible.sort((a, b) => {
-        const aPos = Vector3.create(a.position.x + 0.5 + spawnParcelOffset, a.position.y + 0.5, a.position.z + 0.5)
-        const bPos = Vector3.create(b.position.x + 0.5 + spawnParcelOffset, b.position.y + 0.5, b.position.z + 0.5)
+        const aPos = Vector3.create(
+          a.position.x + 0.5,
+          a.position.y + 0.5,
+          a.position.z + 0.5
+        )
+        const bPos = Vector3.create(
+          b.position.x + 0.5,
+          b.position.y + 0.5,
+          b.position.z + 0.5
+        )
         const aDistance = Vector3.distance(playerPos, aPos)
         const bDistance = Vector3.distance(playerPos, bPos)
         return aDistance - bDistance
@@ -268,6 +304,7 @@ export function createVoxelSystem(
       for (const cell of cellsToMakeVisible) {
         // Check if we've reached the entity limit
         if (activeEntities.length >= maxEntities) {
+          console.log(`Reached entity limit of ${maxEntities}`)
           break
         }
         
@@ -275,10 +312,8 @@ export function createVoxelSystem(
         createdCount++
       }
       
-      // If we tried to create entities, log the result
-      if (cellsToMakeVisible.length > 0 || cellsToMakeInvisible.length > 0) {
-        console.log(`Visibility update: Removed ${cellsToMakeInvisible.length}, Added ${createdCount}, Active ${activeEntities.length}, Pending ${cellsToMakeVisible.length - createdCount}`)
-      }
+      // Always log visibility updates
+      console.log(`Visibility update: Removed=${cellsToMakeInvisible.length}, Added=${createdCount}, Active=${activeEntities.length}, Pending=${cellsToMakeVisible.length - createdCount}`)
     }
     
     // Add the visibility system to the engine
@@ -287,17 +322,46 @@ export function createVoxelSystem(
     // In debug mode (always visible), create entities for all blocks with at least one visible face
     console.log(`Debug mode: Creating entities for all ${visibleFaceBlocks} blocks with visible faces`)
     
-    let createdCount = 0
+    // Sort cells by distance from center (0,0,0) to prioritize central area
+    const sortedCells: GridCell[] = []
     grid.forEach(cell => {
       const hasVisibleFace = Object.values(cell.visibleFaces).some(visible => visible)
-      
-      if (hasVisibleFace && createdCount < maxEntities) {
-        createEntityForCell(cell)
-        createdCount++
+      if (hasVisibleFace) {
+        sortedCells.push(cell)
       }
     })
     
+    // Sort by distance from center
+    sortedCells.sort((a, b) => {
+      const aPos = Vector3.create(
+        a.position.x + 0.5,
+        a.position.y + 0.5,
+        a.position.z + 0.5
+      )
+      const bPos = Vector3.create(
+        b.position.x + 0.5,
+        b.position.y + 0.5,
+        b.position.z + 0.5
+      )
+      const center = Vector3.create(80, 0, 80) // Center of our 10x10 grid
+      const aDistance = Vector3.distance(center, aPos)
+      const bDistance = Vector3.distance(center, bPos)
+      return aDistance - bDistance
+    })
+    
+    // Create entities for the closest cells up to the entity limit
+    let createdCount = 0
+    for (const cell of sortedCells) {
+      if (createdCount >= maxEntities) {
+        console.log(`Reached entity limit of ${maxEntities}`)
+        break
+      }
+      createEntityForCell(cell)
+      createdCount++
+    }
+    
     console.log(`Created ${createdCount} entities in debug mode (max: ${maxEntities})`)
+    console.log(`Remaining cells without entities: ${sortedCells.length - createdCount}`)
   }
   
   // Return a reference to the grid and active entities for external access
@@ -306,8 +370,10 @@ export function createVoxelSystem(
     activeEntities,
     
     // Add a function to preload voxels around a specific location
-    preloadAroundLocation: (centerX: number, centerY: number, centerZ: number, radius: number) => {
-      console.log(`Preloading voxels around (${centerX}, ${centerY}, ${centerZ}) with radius ${radius}`)
+    preloadAroundLocation: function(centerX: number, centerY: number, centerZ: number, radius: number): number {
+      console.log(`[VoxelSystem] Starting preload at (${centerX}, ${centerY}, ${centerZ}) with radius ${radius}`)
+      console.log(`[VoxelSystem] Current grid size: ${grid.size}`)
+      console.log(`[VoxelSystem] Current active entities: ${activeEntities.length}`)
       
       // Create a center position vector
       const centerPos = Vector3.create(centerX, centerY, centerZ)
@@ -322,7 +388,7 @@ export function createVoxelSystem(
         
         // Calculate position with offset
         const cellPos = Vector3.create(
-          cell.position.x + 0.5 + spawnParcelOffset,
+          cell.position.x + 0.5,
           cell.position.y + 0.5,
           cell.position.z + 0.5
         )
@@ -336,15 +402,17 @@ export function createVoxelSystem(
         }
       })
       
+      console.log(`[VoxelSystem] Found ${cellsToPreload.length} cells to preload`)
+      
       // Sort by distance to center
       cellsToPreload.sort((a, b) => {
         const aPos = Vector3.create(
-          a.position.x + 0.5 + spawnParcelOffset,
+          a.position.x + 0.5,
           a.position.y + 0.5,
           a.position.z + 0.5
         )
         const bPos = Vector3.create(
-          b.position.x + 0.5 + spawnParcelOffset,
+          b.position.x + 0.5,
           b.position.y + 0.5,
           b.position.z + 0.5
         )
@@ -355,18 +423,25 @@ export function createVoxelSystem(
         return aDistance - bDistance
       })
       
-      // Create entities for the closest voxels up to maxEntities/2
-      // We reserve half the available entities for the preload and leave the other half for dynamic loading
-      const preloadLimit = Math.floor(maxEntities / 2)
+      // Calculate how many entities we can create
+      const availableSlots = maxEntities - activeEntities.length
+      const preloadLimit = Math.min(Math.floor(availableSlots * 0.5), cellsToPreload.length)
+      
+      console.log(`[VoxelSystem] Available entity slots: ${availableSlots}, Preload limit: ${preloadLimit}`)
+      
+      // Create entities for the closest voxels up to the preload limit
       let preloadCount = 0
       
       for (const cell of cellsToPreload) {
-        if (activeEntities.length >= preloadLimit) break
+        if (preloadCount >= preloadLimit) {
+          console.log(`[VoxelSystem] Reached preload limit of ${preloadLimit}`)
+          break
+        }
         createEntityForCell(cell)
         preloadCount++
       }
       
-      console.log(`Preloaded ${preloadCount} voxels around center location (${cellsToPreload.length - preloadCount} more in queue)`)
+      console.log(`[VoxelSystem] Preloaded ${preloadCount} voxels (${cellsToPreload.length - preloadCount} more in queue)`)
       return preloadCount
     }
   }

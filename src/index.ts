@@ -1,9 +1,10 @@
 import { engine, Transform, Entity, MeshRenderer, Material, MeshCollider, TextShape, InputAction, PointerEventType } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { createVoxelSystem } from './systems/voxel-system'
-import { createTerrainGenerator, BiomeSettings, DEFAULT_BIOME_SETTINGS } from './terrain/terrain-generator'
+import { createTerrainGenerator } from './terrain/terrain-generator'
+import { BiomeSettings, DEFAULT_BIOME_SETTINGS } from './resources'
 import { movePlayerTo } from '~system/RestrictedActions'
-import { MAIN_SCENE_SIZE, DEBUG, TERRAIN_GENERATION_DELAY, PLAYER_TELEPORT_DELAY, VISIBILITY_THRESHOLD, SPAWN_POSITION, MAIN_SCENE_POSITION, BIOME_CUSTOMIZATION_ENABLED, BIOME_CONFIG, SPAWN_PARCEL_X_OFFSET } from './resources'
+import { MAIN_SCENE_SIZE, DEBUG, TERRAIN_GENERATION_DELAY, PLAYER_TELEPORT_DELAY, VISIBILITY_THRESHOLD, SPAWN_POSITION, MAIN_SCENE_POSITION, BIOME_CUSTOMIZATION_ENABLED, BIOME_CONFIG } from './resources'
 import { setupUi } from './ui/ui' 
 import { toggleSplashScreen } from './ui/splashScreen'
 import { setOnApplySettings, toggleBiomeSettings } from './ui/biomeSettings'
@@ -19,8 +20,8 @@ let hasStartedTerrainGeneration = false
 let hasCompletedInitialization = false
 
 // Store managers at module level
-let terrainGeneratorInstance: any
-let voxelSystemInstance: any
+let terrainGeneratorInstance: any = null
+let voxelSystemInstance: any = null
 
 // Store current biome settings
 let currentBiomeSettings: BiomeSettings = {...DEFAULT_BIOME_SETTINGS}
@@ -100,7 +101,7 @@ function createSpawnAreaGround() {
   })
   
   // Add a sign to inform the player
-  createInformationSign()
+  // createInformationSign()
 }
 
 // Create an information sign to guide the player
@@ -164,27 +165,41 @@ function startTerrainGeneration() {
 
   // Set up the voxel system with grid and face visibility optimization
   console.log('Setting up optimized voxel rendering system')
-  voxelSystemInstance = createVoxelSystem(
-    engine, 
-    voxelPositions, 
-    VISIBILITY_THRESHOLD,
-    DEBUG.MAX_ENTITIES,
-    DEBUG,
-    SPAWN_PARCEL_X_OFFSET
-  )
-  
-  // Preload voxels around the teleport location
-  // This ensures that when the player teleports, there will already be voxels visible
-  const centerX = MAIN_SCENE_POSITION.x
-  const centerY = 0 // Start at y=0 to load everything from the ground up
-  const centerZ = MAIN_SCENE_POSITION.z
-  const preloadRadius = 30 // Preload a larger area than the visibility threshold
-  
-  console.log(`Preloading voxels around teleport location (${centerX}, ${centerY}, ${centerZ})`)
-  voxelSystemInstance.preloadAroundLocation(centerX, centerY, centerZ, preloadRadius)
-
-  // Mark terrain generation as started
-  console.log('Minecraft voxel world terrain generation started!')
+  try {
+    voxelSystemInstance = createVoxelSystem(
+      engine, 
+      voxelPositions, 
+      VISIBILITY_THRESHOLD,
+      DEBUG.MAX_ENTITIES,
+      DEBUG
+    )
+    
+    if (!voxelSystemInstance) {
+      throw new Error('Voxel system creation returned null')
+    }
+    
+    console.log('Voxel system created successfully')
+    console.log('Grid size:', voxelSystemInstance.grid.size)
+    console.log('Active entities:', voxelSystemInstance.activeEntities.length)
+    
+    // Preload voxels around the teleport location
+    // This ensures that when the player teleports, there will already be voxels visible
+    const centerX = MAIN_SCENE_POSITION.x
+    const centerY = 0 // Start at y=0 to load everything from the ground up
+    const centerZ = MAIN_SCENE_POSITION.z
+    const preloadRadius = 80 // Cover the majority of the 10x10 grid
+    
+    console.log(`Preloading voxels around teleport location (${centerX}, ${centerY}, ${centerZ})`)
+    const preloadedCount = voxelSystemInstance.preloadAroundLocation(centerX, centerY, centerZ, preloadRadius)
+    console.log(`Successfully preloaded ${preloadedCount} voxels`)
+    
+    // Mark terrain generation as started
+    console.log('Minecraft voxel world terrain generation started!')
+  } catch (error) {
+    console.error('Error during terrain generation:', error)
+    // Reset the voxel system instance if there was an error
+    voxelSystemInstance = null
+  }
 }
 
 // Function to regenerate terrain with custom biome settings
@@ -205,27 +220,37 @@ function regenerateTerrainWithSettings(settings: BiomeSettings) {
   const voxelPositions = terrainGeneratorInstance.generateTerrain()
   console.log(`Regenerated ${voxelPositions.length} voxels with custom settings`)
   
-  // Create new voxel system
-  voxelSystemInstance = createVoxelSystem(
-    engine, 
-    voxelPositions, 
-    VISIBILITY_THRESHOLD,
-    DEBUG.MAX_ENTITIES,
-    DEBUG,
-    SPAWN_PARCEL_X_OFFSET
-  )
-  
-  console.log('Terrain regeneration complete!')
+  try {
+    // Create new voxel system
+    voxelSystemInstance = createVoxelSystem(
+      engine, 
+      voxelPositions, 
+      VISIBILITY_THRESHOLD,
+      DEBUG.MAX_ENTITIES,
+      DEBUG
+    )
+    
+    if (!voxelSystemInstance) {
+      throw new Error('Voxel system creation returned null')
+    }
+    
+    console.log('Terrain regeneration complete!')
+  } catch (error) {
+    console.error('Error during terrain regeneration:', error)
+    voxelSystemInstance = null
+  }
 }
 
 // Clean up existing voxels
 function cleanupExistingVoxels() {
-  if (voxelSystemInstance) {
+  if (voxelSystemInstance && voxelSystemInstance.activeEntities) {
     // If we have active entities from the previous voxel system, remove them
     voxelSystemInstance.activeEntities.forEach((entity: Entity) => {
       engine.removeEntity(entity)
     })
   }
+  // Reset the voxel system instance
+  voxelSystemInstance = null
 }
 
 // Teleport the player to the main scene area
@@ -235,14 +260,18 @@ function teleportPlayerToMainScene() {
   // Calculate a safe height for the teleport pad
   // Base terrain height (12) + variation (8) + tree height (7) + safety margin (5) = 32
   // This ensures we're above the tallest possible terrain features
-  const safeHeight = 32
+  const safeHeight = 20
 
   // Create a larger landing pad that stays longer
   let teleportpad = engine.addEntity()
   Transform.create(teleportpad, {
-    position: Vector3.create(96, safeHeight, 80),
+    position: Vector3.create(
+      MAIN_SCENE_POSITION.x, 
+      safeHeight, 
+      MAIN_SCENE_POSITION.z
+    ),
     rotation: Quaternion.fromEulerDegrees(90, 0, 0),
-    scale: Vector3.create(100, 100, 1) // Larger pad to ensure player doesn't miss it
+    scale: Vector3.create(160, 160, 1) // Cover the entire 10x10 grid
   })
   
   MeshRenderer.setPlane(teleportpad) // Make it visible so players can see where they're landing
@@ -266,23 +295,37 @@ function teleportPlayerToMainScene() {
   // After teleporting, trigger one more preload around the player position
   // to ensure nearest voxels are loaded before removing the teleport pad
   utils.timers.setTimeout(() => {
+    // Check if voxel system is still valid
+    if (!voxelSystemInstance) {
+      console.error('Voxel system not available for preloading')
+      return
+    }
+
     // The player may have moved, so get current position for accurate preloading
     const playerTransform = Transform.getMutableOrNull(engine.PlayerEntity)
-    if (playerTransform) {
-      console.log('Preloading voxels around player\'s current position')
-      voxelSystemInstance.preloadAroundLocation(
+    if (!playerTransform) {
+      console.error('Player transform not found for preloading')
+      return
+    }
+
+    console.log('Preloading voxels around player\'s current position')
+    try {
+      const preloadedCount = voxelSystemInstance.preloadAroundLocation(
         playerTransform.position.x,
         playerTransform.position.y - 10, // Preload below the player
         playerTransform.position.z,
-        20 // Smaller radius for more focused loading
+        50 // Larger radius for better coverage
       )
+      console.log(`Successfully preloaded ${preloadedCount} voxels around player`)
+    } catch (error) {
+      console.error('Error preloading voxels around player:', error)
     }
     
     // Set a timer to remove the teleport pad after sufficient time
     utils.timers.setTimeout(() => {
       console.log('Removing teleport pad')
       engine.removeEntity(teleportpad)
-    }, 30000) // 15 more seconds after preloading
+    }, 30000) // 30 seconds after preloading
   }, 5000) // Wait 5 seconds after teleport before preloading
   
   // Show biome settings hint

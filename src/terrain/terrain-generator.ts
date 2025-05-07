@@ -1,59 +1,6 @@
-// Define the voxel position interface with block type
-export interface VoxelPosition {
-  x: number
-  y: number
-  z: number
-  type: BlockType
-}
-
-// Define block types
-export enum BlockType {
-  GRASS = 'grass',
-  DIRT = 'dirt',
-  STONE_DARK = 'stone_dark',
-  SAND = 'sand',
-  WOOD = 'wood',
-  LEAVES = 'leaves',
-  WOOD_PLANK_LIGHT_RED = 'wood_plank_light_red',
-  WOOD_PLANK_DARK = 'wood_plank_dark',
-  WATER = 'water'
-}
-
-// Define biome settings interface for user customization
-export interface BiomeSettings {
-  // Beach settings
-  beachSize: number; // 0.0 to 1.0 - percentage of map for beach
-  
-  // Lake settings
-  lakeEnabled: boolean;
-  lakeSize: number; // 0.0 to 1.0 - size of the lake
-  lakeDepth: number; // Water depth in blocks
-  
-  // Forest settings
-  treeDensity: number; // 0.0 to 1.0 - probability of tree placement
-  
-  // Cabin settings
-  cabinsEnabled: boolean;
-  cabinDensity: number; // 0.0 to 1.0 - probability of cabin placement in suitable areas
-  
-  // Terrain settings
-  terrainHeight: number; // Base height of terrain
-  terrainVariation: number; // Variation factor for sine wave amplitude
-}
-
-// Default biome settings
-export const DEFAULT_BIOME_SETTINGS: BiomeSettings = {
-  beachSize: 0.3,
-  lakeEnabled: true,
-  lakeSize: 0.2,
-  lakeDepth: 6,
-  treeDensity: 0.03,
-  cabinsEnabled: true,
-  cabinDensity: 0.7,
-  terrainHeight: 8,
-  terrainVariation: 4
-}
-
+import { DEFAULT_BIOME_SETTINGS, VoxelPosition } from "../resources";
+import { BiomeSettings } from "../resources";
+import { BlockType } from "../resources";
 /**
  * Creates a terrain generator for the scene
  * @param sceneSize The size of the scene (width and depth)
@@ -84,10 +31,11 @@ export function createTerrainGenerator(
       console.log(`Using biome settings: Beach size: ${settings.beachSize}, Tree density: ${settings.treeDensity}`)
       
       // Generate terrain for the 10x10 parcel grid (160x160 voxels)
-      // The SW corner of the main scene starts at x=0, z=0 (with the spawn parcel at -1,0)
+      // Each parcel is 16x16 meters. The full scene is 160x160 voxels covering 160x160 meters
+      // When placed in the world, an X offset of 16 is added for the spawn parcel
       for (let localX = 0; localX < sceneSize; localX++) {
         for (let localZ = 0; localZ < sceneSize; localZ++) {
-          // Convert local coordinates to world coordinates 
+          // Convert local coordinates to world coordinates (0-159 for both X and Z)
           const worldX = localX;
           const worldZ = localZ;
           

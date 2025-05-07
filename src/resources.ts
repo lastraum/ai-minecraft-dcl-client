@@ -4,27 +4,26 @@ export let slug = 'lastslice-voxel-world'
 export const DEBUG = {
   ALWAYS_VISIBLE: true, // Set to true to make all voxels visible regardless of distance
   MAX_LAYERS: 0,        // Maximum number of vertical layers to generate (for performance testing)
-  MAX_ENTITIES: 25000   // Maximum number of voxel entities to create at once - increased for better coverage
+  MAX_ENTITIES: 10000   // Maximum number of voxel entities to create at once
 }
 
 // Scene configuration
 export const MAIN_SCENE_SIZE = 160 // 160x160 voxel grid for main scene (10x10 parcels)
 export const CHUNK_SIZE = 4 // 4x4x4 chunks
-export const VISIBILITY_THRESHOLD = 20 // Increased visibility threshold for larger scene
+export const VISIBILITY_THRESHOLD = 100 // Visibility threshold for voxels
 
 // Chunk loading configuration
-export const HORIZONTAL_VISIBILITY_THRESHOLD = 30 // Larger threshold for horizontal chunks
-export const VERTICAL_VISIBILITY_THRESHOLD = 15 // Smaller threshold for vertical chunks
-export const HORIZONTAL_PRIORITY_FACTOR = 0.5 // Lower weight for horizontal distance (prioritize horizontal loading)
+export const HORIZONTAL_VISIBILITY_THRESHOLD = 80 // Threshold for horizontal chunks
+export const VERTICAL_VISIBILITY_THRESHOLD = 15 // Threshold for vertical chunks
+export const HORIZONTAL_PRIORITY_FACTOR = 0.7 // Priority factor for horizontal loading
 
 // Scene positions
-export const SPAWN_POSITION = {x: 8, y: 0, z: 8} // Center of spawn parcel (-1,0)
-export const MAIN_SCENE_POSITION = {x: 96, y: 80, z: 80} // Center of the 10x10 grid
-export const SPAWN_PARCEL_X_OFFSET = 16 // The X offset (in meters) for the spawn parcel
+export const SPAWN_POSITION = {x: 80, y: 0, z: 80} // Center of the 10x10 grid
+export const MAIN_SCENE_POSITION = {x: 80, y: 80, z: 80} // Center of the 10x10 grid
 
 // Timing configuration (in seconds)
-export const TERRAIN_GENERATION_DELAY = 20 // Wait 1 second before generating terrain
-export const PLAYER_TELEPORT_DELAY = 15 // Wait 5 seconds before teleporting player
+export const TERRAIN_GENERATION_DELAY = 20 // Wait 20 seconds before generating terrain
+export const PLAYER_TELEPORT_DELAY = 15 // Wait 15 seconds before teleporting player
 
 // Biome Settings Configuration
 export const BIOME_CONFIG = {
@@ -102,3 +101,60 @@ export const MODEL_PATHS = {
 }
 
 
+
+
+// Define the voxel position interface with block type
+export interface VoxelPosition {
+    x: number
+    y: number
+    z: number
+    type: BlockType
+  }
+  
+  // Define block types
+  export enum BlockType {
+    GRASS = 'grass',
+    DIRT = 'dirt',
+    STONE_DARK = 'stone_dark',
+    SAND = 'sand',
+    WOOD = 'wood',
+    LEAVES = 'leaves',
+    WOOD_PLANK_LIGHT_RED = 'wood_plank_light_red',
+    WOOD_PLANK_DARK = 'wood_plank_dark',
+    WATER = 'water'
+  }
+  
+  // Define biome settings interface for user customization
+  export interface BiomeSettings {
+    // Beach settings
+    beachSize: number; // 0.0 to 1.0 - percentage of map for beach
+    
+    // Lake settings
+    lakeEnabled: boolean;
+    lakeSize: number; // 0.0 to 1.0 - size of the lake
+    lakeDepth: number; // Water depth in blocks
+    
+    // Forest settings
+    treeDensity: number; // 0.0 to 1.0 - probability of tree placement
+    
+    // Cabin settings
+    cabinsEnabled: boolean;
+    cabinDensity: number; // 0.0 to 1.0 - probability of cabin placement in suitable areas
+    
+    // Terrain settings
+    terrainHeight: number; // Base height of terrain
+    terrainVariation: number; // Variation factor for sine wave amplitude
+  }
+  
+  // Default biome settings
+  export const DEFAULT_BIOME_SETTINGS: BiomeSettings = {
+    beachSize: 0.3,
+    lakeEnabled: true,
+    lakeSize: 0.2,
+    lakeDepth: 6,
+    treeDensity: 0.03,
+    cabinsEnabled: true,
+    cabinDensity: 0.7,
+    terrainHeight: 8,
+    terrainVariation: 4
+  }
