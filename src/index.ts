@@ -7,8 +7,10 @@ import { movePlayerTo } from '~system/RestrictedActions'
 import { MAIN_SCENE_SIZE, DEBUG, TERRAIN_GENERATION_DELAY, PLAYER_TELEPORT_DELAY, VISIBILITY_THRESHOLD, SPAWN_POSITION, MAIN_SCENE_POSITION, BIOME_CUSTOMIZATION_ENABLED, BIOME_CONFIG } from './resources'
 import { setupUi } from './ui/ui' 
 import { toggleSplashScreen } from './ui/splashScreen'
-import { setOnApplySettings, toggleBiomeSettings } from './ui/biomeSettings'
+import { LOADING_BIOME_TIMER, updateLoadingBiomeTimer, showLoadingBiomeUI, chooseLoadingPhrase } from './ui/loadingBiomeUI'
 import * as utils from '@dcl-sdk/utils'
+import { initializeBiomeSettings, subscribeToBiomeSettings, getBiomeSettings, updateBiomeSettings } from './state/biomeState'
+import { show } from './ui/splashScreen'
 // Track timing for delays
 let terrainGenerationTimer = 0
 let playerTeleportTimer = 0
@@ -29,53 +31,40 @@ let currentBiomeSettings: BiomeSettings = {...DEFAULT_BIOME_SETTINGS}
 // Track entities for cleanup during regeneration
 let voxelEntities: Entity[] = []
 
+// Store teleport pad entity reference
+let teleportPadEntity: Entity | null = null
+let teleportPadRemovalTimer = 0
+
 export function main() {
   console.log('Initializing Minecraft voxel world...')
   
+  // Initialize biome settings with random values
+  initializeBiomeSettings()
+  
+  // Get the initial biome settings for later use
+  currentBiomeSettings = getBiomeSettings()
+  console.log('Initial biome settings:', JSON.stringify(currentBiomeSettings))
+  
   setupUi()
   
-  // Setup biome settings callback
-  if (BIOME_CUSTOMIZATION_ENABLED) {
-    setOnApplySettings(regenerateTerrainWithSettings)
-  }
-  
-  // Phase 1: Initial setup
-  setupScene()
+  // Phase 1: Initial setup is disabled until UI is ready
+  // setupScene()
   
   // Add system for handling timed events
-  engine.addSystem(timerSystem)
-}
-
-// Generate random biome settings within the defined ranges
-function generateRandomBiomeSettings(): BiomeSettings {
-  // Helper function to get random number in range
-  const randomInRange = (min: number, max: number): number => {
-    return min + Math.random() * (max - min)
-  }
-  
-  // Create random settings within the defined ranges
-  return {
-    beachSize: randomInRange(BIOME_CONFIG.BEACH_SIZE_MIN, BIOME_CONFIG.BEACH_SIZE_MAX),
-    lakeEnabled: Math.random() > 0.3, // 70% chance of having a lake
-    lakeSize: randomInRange(BIOME_CONFIG.LAKE_SIZE_MIN, BIOME_CONFIG.LAKE_SIZE_MAX),
-    lakeDepth: Math.floor(randomInRange(BIOME_CONFIG.LAKE_DEPTH_MIN, BIOME_CONFIG.LAKE_DEPTH_MAX)),
-    treeDensity: randomInRange(BIOME_CONFIG.TREE_DENSITY_MIN, BIOME_CONFIG.TREE_DENSITY_MAX),
-    cabinsEnabled: Math.random() > 0.5, // 50% chance of having cabins
-    cabinDensity: randomInRange(BIOME_CONFIG.CABIN_DENSITY_MIN, BIOME_CONFIG.CABIN_DENSITY_MAX),
-    terrainHeight: Math.floor(randomInRange(BIOME_CONFIG.TERRAIN_HEIGHT_MIN, BIOME_CONFIG.TERRAIN_HEIGHT_MAX)),
-    terrainVariation: Math.floor(randomInRange(BIOME_CONFIG.TERRAIN_VARIATION_MIN, BIOME_CONFIG.TERRAIN_VARIATION_MAX))
-  }
+  // engine.addSystem(timerSystem)
 }
 
 // Setup the initial scene elements
-function setupScene() {
+export function setupScene() {
   console.log('Step 1: Setting up scene')
+
+  engine.addSystem(timerSystem)
   
-  // Generate random biome settings
-  currentBiomeSettings = generateRandomBiomeSettings()
-  console.log('Generated random biome settings:', JSON.stringify(currentBiomeSettings))
+  // Use the current biome settings from state manager
+  currentBiomeSettings = getBiomeSettings()
+  console.log('Using biome settings:', JSON.stringify(currentBiomeSettings))
   
-  // Initialize terrain generator with random settings
+  // Initialize terrain generator with current settings
   terrainGeneratorInstance = createTerrainGenerator(MAIN_SCENE_SIZE, DEBUG.MAX_LAYERS, currentBiomeSettings)
   
   // Create a simple flat ground for the spawn area
@@ -103,35 +92,31 @@ function createSpawnAreaGround() {
   // Add a sign to inform the player
   // createInformationSign()
 }
-
-// Create an information sign to guide the player
-function createInformationSign() {
-  // Create sign entity
-  const signEntity = engine.addEntity()
-  
-  // Position it in the spawn area (-1,0 parcel)
-  Transform.create(signEntity, {
-    position: Vector3.create(8, 1.5, 8), // Center of spawn parcel
-    rotation: Quaternion.fromEulerDegrees(0, 90, 0) // Face the player toward +X
-  })
-  
-  // Add text to the sign
-  TextShape.create(signEntity, {
-    text: 'Welcome to Minecraft World!\nLoading terrain...\nYou will be teleported shortly.',
-    fontSize: 2,
-    textColor: Color4.create(1, 1, 1, 1), // White text
-    outlineColor: Color4.create(0, 0, 0, 1), // Black outline
-    outlineWidth: 0.1,
-    width: 10,
-    height: 5,
-    textWrapping: true
-  })
-}
-
 // Timer system to handle delayed initialization
 function timerSystem(dt: number): void {
+
+  if(show){
+    if(LOADING_BIOME_TIMER <= 0){
+      chooseLoadingPhrase()
+    }else{
+      updateLoadingBiomeTimer(dt)
+    }
+  }
+
   // Skip if initialization is complete and player is teleported
-  if (hasCompletedInitialization && isPlayerTeleported) return
+  if (hasCompletedInitialization && isPlayerTeleported) {
+    // Handle teleport pad removal even after initialization is complete
+    if (teleportPadRemovalTimer > 0 && teleportPadEntity) {
+      teleportPadRemovalTimer -= dt;
+      if (teleportPadRemovalTimer <= 0) {
+        console.log('Removing teleport pad');
+        engine.removeEntity(teleportPadEntity);
+        teleportPadEntity = null;
+          toggleSplashScreen()
+      }
+    }
+    return;
+  }
   
   // Step 2: Start terrain generation after delay
   if (!hasStartedTerrainGeneration) {
@@ -152,6 +137,8 @@ function timerSystem(dt: number): void {
       isPlayerTeleported = true
     }
   }
+
+
 }
 
 // Start the terrain generation process
@@ -210,6 +197,9 @@ function regenerateTerrainWithSettings(settings: BiomeSettings) {
   // Store current settings
   currentBiomeSettings = {...settings}
   
+  // Update the biome state
+  updateBiomeSettings(settings)
+  
   // Clean up existing voxels
   cleanupExistingVoxels()
   
@@ -257,40 +247,72 @@ function cleanupExistingVoxels() {
 function teleportPlayerToMainScene() {
   console.log('Step 3: Teleporting player to main scene')
 
-  // Calculate a safe height for the teleport pad
-  // Base terrain height (12) + variation (8) + tree height (7) + safety margin (5) = 32
-  // This ensures we're above the tallest possible terrain features
-  const safeHeight = 20
+  // Find the tallest non-water voxel in the terrain
+  let highestPoint = 0;
+  
+  if (voxelSystemInstance && voxelSystemInstance.grid) {
+    // Scan the area around the teleport position
+    const scanRadius = 5; // Scan a small area around the teleport point
+    const centerX = Math.floor(MAIN_SCENE_POSITION.x);
+    const centerZ = Math.floor(MAIN_SCENE_POSITION.z);
+    
+    // Loop through the area to find the highest non-water point
+    for (let x = centerX - scanRadius; x <= centerX + scanRadius; x++) {
+      for (let z = centerZ - scanRadius; z <= centerZ + scanRadius; z++) {
+        // Scan from top to bottom to find the first solid block
+        for (let y = 50; y >= 0; y--) { // Start from a reasonably high point
+          const voxel = voxelSystemInstance.grid.get(x, y, z);
+          if (voxel && voxel.type !== 'water') {
+            if (y > highestPoint) {
+              highestPoint = y;
+            }
+            break; // Found highest point at this x,z coordinate
+          }
+        }
+      }
+    }
+    
+    console.log(`Found highest non-water point at y=${highestPoint}`);
+  } else {
+    console.log('Voxel system not ready, using default height');
+    // Default to a safe height if we can't determine terrain height
+    highestPoint = 15;
+  }
 
-  // Create a larger landing pad that stays longer
-  let teleportpad = engine.addEntity()
-  Transform.create(teleportpad, {
+  // Add a safety margin to ensure we're above the terrain
+  const teleportHeight = highestPoint + 10;
+
+  // Create a landing pad at the appropriate height
+  teleportPadEntity = engine.addEntity()
+  Transform.create(teleportPadEntity, {
     position: Vector3.create(
       MAIN_SCENE_POSITION.x, 
-      safeHeight, 
+      teleportHeight, 
       MAIN_SCENE_POSITION.z
     ),
     rotation: Quaternion.fromEulerDegrees(90, 0, 0),
-    scale: Vector3.create(160, 160, 1) // Cover the entire 10x10 grid
+    scale: Vector3.create(5, 5, 1) // Cover the entire 10x10 grid
   })
   
-  MeshRenderer.setPlane(teleportpad) // Make it visible so players can see where they're landing
-  Material.setPbrMaterial(teleportpad, {
+  MeshRenderer.setPlane(teleportPadEntity) // Make it visible so players can see where they're landing
+  Material.setPbrMaterial(teleportPadEntity, {
     albedoColor: { r: 0.2, g: 0.8, b: 0.8, a: 0.7 } // Transparent blue
   })
-  MeshCollider.setPlane(teleportpad)
+  MeshCollider.setPlane(teleportPadEntity)
 
-  // Teleport the player to the safe height
+  // Teleport the player to above the highest point
   movePlayerTo({
     newRelativePosition: {
       x: MAIN_SCENE_POSITION.x,
-      y: safeHeight + 2, // Place player slightly above the pad
+      y: teleportHeight + 2, // Place player slightly above the pad
       z: MAIN_SCENE_POSITION.z
     }
   })
   
-  console.log('Player teleported to main scene')
-  toggleSplashScreen()
+  console.log(`Player teleported to main scene at height ${teleportHeight + 2}`);
+  
+  // Start the timer to remove the teleport pad after 20 seconds
+  teleportPadRemovalTimer = 50 // 50 seconds
   
   // After teleporting, trigger one more preload around the player position
   // to ensure nearest voxels are loaded before removing the teleport pad
@@ -320,12 +342,6 @@ function teleportPlayerToMainScene() {
     } catch (error) {
       console.error('Error preloading voxels around player:', error)
     }
-    
-    // Set a timer to remove the teleport pad after sufficient time
-    utils.timers.setTimeout(() => {
-      console.log('Removing teleport pad')
-      engine.removeEntity(teleportpad)
-    }, 30000) // 30 seconds after preloading
   }, 5000) // Wait 5 seconds after teleport before preloading
   
   // Show biome settings hint

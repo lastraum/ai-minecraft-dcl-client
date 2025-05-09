@@ -4,7 +4,7 @@
   "display": {
     "title": "Minecraft Voxel World",
     "description": "A Minecraft-like voxel world in Decentraland",
-    "navmapThumbnail": "assets/thumbnail.png",
+    "navmapThumbnail": "assets/scene-thumbnail.png",
     "favicon": "assets/favicon.ico"
   },
   "owner": "Last Slice",
@@ -50,5 +50,8 @@
   ],
   "featureToggles": {
     "voiceChat": "enabled"
-  }
+  },
+  "worldConfiguration": {
+		"name": "Talentless.dcl.eth"
+	}
 } 

@@ -1,38 +1,9 @@
 import { ColliderLayer, engine, Entity, GltfContainer, Transform, VisibilityComponent } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
-import { VoxelPosition, BlockType } from '../resources'
+import { VoxelPosition, BlockType, DebugSettings, GridCell, DIRECTIONS, MODEL_PATHS } from '../resources'
 import { HORIZONTAL_VISIBILITY_THRESHOLD, VERTICAL_VISIBILITY_THRESHOLD } from '../resources'
 
-// Define the grid cell interface
-interface GridCell {
-  position: VoxelPosition
-  entity: Entity | null
-  visibleFaces: {
-    top: boolean
-    bottom: boolean
-    north: boolean
-    south: boolean
-    east: boolean
-    west: boolean
-  }
-}
 
-// Constants for face visibility checks
-const DIRECTIONS = [
-  { x: 0, y: 1, z: 0, face: 'top' },    // top
-  { x: 0, y: -1, z: 0, face: 'bottom' }, // bottom
-  { x: 0, y: 0, z: 1, face: 'north' },   // north
-  { x: 0, y: 0, z: -1, face: 'south' },  // south
-  { x: 1, y: 0, z: 0, face: 'east' },    // east
-  { x: -1, y: 0, z: 0, face: 'west' }    // west
-]
-
-// Debug interface
-interface DebugSettings {
-  ALWAYS_VISIBLE: boolean
-  MAX_LAYERS?: number
-  MAX_ENTITIES?: number
-}
 
 /**
  * Creates and sets up the voxel system with an optimized approach:
@@ -63,19 +34,7 @@ export function createVoxelSystem(
 ) {
   // Debug flags
   const alwaysVisible = debug?.ALWAYS_VISIBLE || false
-  
-  // Block type model mapping
-  const modelPaths: Record<BlockType, string> = {
-    [BlockType.GRASS]: 'models/grass.glb',
-    [BlockType.DIRT]: 'models/dirt.glb',
-    [BlockType.STONE_DARK]: 'models/stone_dark.glb',
-    [BlockType.SAND]: 'models/sand.glb',
-    [BlockType.WOOD]: 'models/woodplanks.glb',
-    [BlockType.LEAVES]: 'models/leaves.glb',
-    [BlockType.WOOD_PLANK_LIGHT_RED]: 'models/wood_plank_light_red.glb',
-    [BlockType.WOOD_PLANK_DARK]: 'models/wood_plank_dark.glb',
-    [BlockType.WATER]: 'models/water.glb'
-  }
+
 
   // Create a 3D grid to store all voxel data
   // Using a Map with string keys for efficient lookups
@@ -153,7 +112,7 @@ export function createVoxelSystem(
     
     // Add GltfContainer component (model) based on block type
     GltfContainer.create(entity, {
-      src: modelPaths[cell.position.type],
+      src: MODEL_PATHS[cell.position.type],
       invisibleMeshesCollisionMask: ColliderLayer.CL_NONE,
       visibleMeshesCollisionMask: cell.position.type === BlockType.WATER ? 
         ColliderLayer.CL_POINTER : // Water has no collision, only pointer
@@ -170,9 +129,9 @@ export function createVoxelSystem(
       )
     })
     
-    // Add VisibilityComponent (initially visible if in debug mode)
+    // Add VisibilityComponent (always initially visible when created)
     VisibilityComponent.create(entity, {
-      visible: alwaysVisible
+      visible: true
     })
     
     // Store the entity reference and add to active entities list
@@ -201,10 +160,7 @@ export function createVoxelSystem(
   
   // Determine if a cell should be visible based on distance and face visibility
   function shouldBeVisible(cell: GridCell, playerPos: Vector3): boolean {
-    // Always visible in debug mode
-    if (alwaysVisible) return true
-    
-    // Check if any face is visible
+    // Check if any face is visible first
     const hasVisibleFace = Object.values(cell.visibleFaces).some(visible => visible)
     if (!hasVisibleFace) {
       return false // No visible faces, no need to create entity
@@ -226,8 +182,11 @@ export function createVoxelSystem(
     
     // Debug logging for cells near the edge of visibility
     if (horizontalDistance > HORIZONTAL_VISIBILITY_THRESHOLD * 0.8) {
-      console.log(`Cell at (${cellPos.x}, ${cellPos.y}, ${cellPos.z}) - Horizontal distance: ${horizontalDistance}, Vertical distance: ${verticalDistance}`)
+      // console.log(`Cell at (${cellPos.x}, ${cellPos.y}, ${cellPos.z}) - Horizontal distance: ${horizontalDistance}, Vertical distance: ${verticalDistance}`)
     }
+    
+    // In debug mode (ALWAYS_VISIBLE), all voxels with visible faces are visible regardless of distance
+    if (alwaysVisible) return true;
     
     // Use different thresholds for horizontal and vertical visibility
     return horizontalDistance < HORIZONTAL_VISIBILITY_THRESHOLD && 
@@ -235,91 +194,98 @@ export function createVoxelSystem(
   }
   
   // Create a system that updates visibility and manages entities
-  if (!alwaysVisible) {
-    const visibilitySystem = () => {
-      // Get player's position
-      const playerTransform = Transform.getMutableOrNull(engine.PlayerEntity)
-      if (!playerTransform) {
-        console.log('No player transform found')
-        return
-      }
-      const playerPos = playerTransform.position
+  // Create the visibility system regardless of ALWAYS_VISIBLE mode
+  const visibilitySystem = () => {
+    // Get player's position
+    const playerTransform = Transform.getMutableOrNull(engine.PlayerEntity)
+    if (!playerTransform) {
+      console.log('No player transform found')
+      return
+    }
+    const playerPos = playerTransform.position
+    
+    // Always log player position for debugging
+    console.log(`Player position: (${playerPos.x}, ${playerPos.y}, ${playerPos.z})`)
+    
+    // Track entities to be made visible and invisible
+    const cellsToMakeVisible: GridCell[] = []
+    const cellsToMakeInvisible: GridCell[] = []
+    
+    // Log grid statistics
+    let totalCells = 0
+    let cellsWithEntities = 0
+    let cellsInRange = 0
+    
+    // Determine which cells should be visible or invisible
+    grid.forEach(cell => {
+      totalCells++
+      if (cell.entity) cellsWithEntities++
       
-      // Always log player position for debugging
-      console.log(`Player position: (${playerPos.x}, ${playerPos.y}, ${playerPos.z})`)
+      // For both modes, use shouldBeVisible which handles both ALWAYS_VISIBLE and distance checks
+      const shouldBeVisibleNow = shouldBeVisible(cell, playerPos)
       
-      // Track entities to be made visible and invisible
-      const cellsToMakeVisible: GridCell[] = []
-      const cellsToMakeInvisible: GridCell[] = []
+      if (shouldBeVisibleNow) cellsInRange++
       
-      // Log grid statistics
-      let totalCells = 0
-      let cellsWithEntities = 0
-      let cellsInRange = 0
-      
-      // Determine which cells should be visible or invisible
-      grid.forEach(cell => {
-        totalCells++
-        if (cell.entity) cellsWithEntities++
-        
-        const shouldBeVisibleNow = shouldBeVisible(cell, playerPos)
-        if (shouldBeVisibleNow) cellsInRange++
-        
-        if (shouldBeVisibleNow && !cell.entity) {
-          // Cell should be visible but has no entity
-          cellsToMakeVisible.push(cell)
-        } else if (!shouldBeVisibleNow && cell.entity) {
-          // Cell has entity but should not be visible
+      if (shouldBeVisibleNow && !cell.entity) {
+        // Cell should be visible but has no entity
+        cellsToMakeVisible.push(cell)
+      } else if (!shouldBeVisibleNow && cell.entity) {
+        // Cell has entity but should not be visible - only used in normal mode
+        if (!alwaysVisible) {
           cellsToMakeInvisible.push(cell)
         }
-      })
-      
-      // Log grid statistics
-      console.log(`Grid stats: Total=${totalCells}, WithEntities=${cellsWithEntities}, InRange=${cellsInRange}`)
-      
-      // Sort cells to make visible by distance to player (closest first)
-      cellsToMakeVisible.sort((a, b) => {
-        const aPos = Vector3.create(
-          a.position.x + 0.5,
-          a.position.y + 0.5,
-          a.position.z + 0.5
-        )
-        const bPos = Vector3.create(
-          b.position.x + 0.5,
-          b.position.y + 0.5,
-          b.position.z + 0.5
-        )
-        const aDistance = Vector3.distance(playerPos, aPos)
-        const bDistance = Vector3.distance(playerPos, bPos)
-        return aDistance - bDistance
-      })
-      
-      // Process cells to make invisible first to free up entity slots
+      }
+    })
+    
+    // Log grid statistics
+    console.log(`Grid stats: Total=${totalCells}, WithEntities=${cellsWithEntities}, InRange=${cellsInRange}`)
+    
+    // Sort cells to make visible by distance to player (closest first)
+    cellsToMakeVisible.sort((a, b) => {
+      const aPos = Vector3.create(
+        a.position.x + 0.5,
+        a.position.y + 0.5,
+        a.position.z + 0.5
+      )
+      const bPos = Vector3.create(
+        b.position.x + 0.5,
+        b.position.y + 0.5,
+        b.position.z + 0.5
+      )
+      const aDistance = Vector3.distance(playerPos, aPos)
+      const bDistance = Vector3.distance(playerPos, bPos)
+      return aDistance - bDistance
+    })
+    
+    // In normal mode, process cells to make invisible first to free up entity slots
+    if (!alwaysVisible) {
       cellsToMakeInvisible.forEach(cell => {
         removeEntityForCell(cell)
       })
-      
-      // Process cells to make visible, up to the maximum entity limit
-      let createdCount = 0
-      for (const cell of cellsToMakeVisible) {
-        // Check if we've reached the entity limit
-        if (activeEntities.length >= maxEntities) {
-          console.log(`Reached entity limit of ${maxEntities}`)
-          break
-        }
-        
-        createEntityForCell(cell)
-        createdCount++
-      }
-      
-      // Always log visibility updates
-      console.log(`Visibility update: Removed=${cellsToMakeInvisible.length}, Added=${createdCount}, Active=${activeEntities.length}, Pending=${cellsToMakeVisible.length - createdCount}`)
     }
     
-    // Add the visibility system to the engine
-    engine.addSystem(visibilitySystem)
-  } else {
-    // In debug mode (always visible), create entities for all blocks with at least one visible face
+    // Process cells to make visible, up to the maximum entity limit
+    let createdCount = 0
+    for (const cell of cellsToMakeVisible) {
+      // Check if we've reached the entity limit
+      if (activeEntities.length >= maxEntities) {
+        console.log(`Reached entity limit of ${maxEntities}`)
+        break
+      }
+      
+      createEntityForCell(cell)
+      createdCount++
+    }
+    
+    // Always log visibility updates
+    console.log(`Visibility update: Removed=${cellsToMakeInvisible.length}, Added=${createdCount}, Active=${activeEntities.length}, Pending=${cellsToMakeVisible.length - createdCount}`)
+  }
+  
+  // Add the visibility system to the engine regardless of debug mode
+  engine.addSystem(visibilitySystem)
+  
+  // In debug mode (always visible), preload entities for all blocks with at least one visible face
+  if (alwaysVisible) {
     console.log(`Debug mode: Creating entities for all ${visibleFaceBlocks} blocks with visible faces`)
     
     // Sort cells by distance from center (0,0,0) to prioritize central area
@@ -351,9 +317,11 @@ export function createVoxelSystem(
     
     // Create entities for the closest cells up to the entity limit
     let createdCount = 0
+    const initialLoadLimit = Math.min(Math.floor(maxEntities * 0.7), sortedCells.length) // Use only 70% of entity limit for initial load
+    
     for (const cell of sortedCells) {
-      if (createdCount >= maxEntities) {
-        console.log(`Reached entity limit of ${maxEntities}`)
+      if (createdCount >= initialLoadLimit) {
+        console.log(`Reached initial load limit of ${initialLoadLimit}`)
         break
       }
       createEntityForCell(cell)
@@ -361,7 +329,7 @@ export function createVoxelSystem(
     }
     
     console.log(`Created ${createdCount} entities in debug mode (max: ${maxEntities})`)
-    console.log(`Remaining cells without entities: ${sortedCells.length - createdCount}`)
+    console.log(`Remaining cells without entities: ${sortedCells.length - createdCount} (will be dynamically loaded)`)
   }
   
   // Return a reference to the grid and active entities for external access

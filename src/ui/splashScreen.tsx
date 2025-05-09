@@ -1,10 +1,13 @@
 import ReactEcs, {Dropdown, Input, UiEntity} from '@dcl/sdk/react-ecs'
 import { slug } from '../resources';
+import { NewBiomeUI } from './newBiome';
+import { LoadingBiomeUI } from './loadingBiomeUI';
 
-let show = false
+export let show = true
 
 export function toggleSplashScreen(){
-    // show = !show
+    show = !show
+    console.log(`Splash screen visibility set to: ${show}`)
 }
 
 export function createSplashScreen(){
@@ -27,6 +30,14 @@ export function createSplashScreen(){
               },
               textureMode: 'stretch',
             }}
-           />
+           >
+
+
+            <NewBiomeUI/>
+            <LoadingBiomeUI/>
+
+
+
+           </UiEntity>
     )
 }
